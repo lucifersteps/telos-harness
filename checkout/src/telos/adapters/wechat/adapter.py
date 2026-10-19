@@ -195,8 +195,8 @@ class WeChatAdapter:
         self._recorded_inputs.clear()
         return recorded
 
-    async def send_text(self, ref: ConversationRef, text: str) -> SendResult:
-        return await self.outbound.send_text(ref, text)
+    async def send_text(self, ref: ConversationRef, text: str, *, protected_text: str = "") -> SendResult:
+        return await self.outbound.send_text(ref, text, protected_text=protected_text)
 
     async def request_approval(
         self,
@@ -216,7 +216,7 @@ class WeChatAdapter:
         if self._approval_registry is not None and request.request_id:
             registry_future = self._approval_registry.register(request)
         try:
-            delivery = await self.send_text(ref, message)
+            delivery = await self.send_text(ref, message, protected_text=message)
             if not delivery.ok:
                 feedback = delivery.error or "approval message delivery failed"
                 if registry_future is not None and not registry_future.done():

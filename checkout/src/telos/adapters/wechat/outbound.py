@@ -44,13 +44,15 @@ class WeChatOutbound:
         self.config = config
         self.send_text_fn = send_text_fn
 
-    async def send_text(self, ref: ConversationRef, text: str) -> SendResult:
+    async def send_text(self, ref: ConversationRef, text: str, *, protected_text: str = "") -> SendResult:
         return await send_text_in_bubbles(
             self.send_text_fn,
             ref,
             text,
             max_bubbles=self.config.max_bubbles,
             max_text_chars=self.config.max_text_chars,
+            split_multiline=self.config.split_multiline_messages,
+            protected_text=protected_text,
         )
 
 

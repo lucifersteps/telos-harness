@@ -64,7 +64,8 @@ def test_steer_confirmation_cannot_approve_undelivered_preview(tmp_path):
             assert await asyncio.to_thread(entered.wait,10)
             confirm=asyncio.create_task(h.submit('1',key='premature'))
             await asyncio.sleep(.05);release.set();await asyncio.gather(first,confirm)
-            assert not h.native.writes and len(h.sent)==1 and '没有可确认' in h.sent[0]
+            assert not h.native.writes and len(h.sent)==2 and '没有可确认' in h.sent[0]
+            assert h.sent[1]==h.runtime.business.pending(h.session)['text']
             await h.submit('1',key='delivered-confirm')
             assert len(h.native.writes)==1
         finally:release.set();await h.close()
@@ -109,7 +110,7 @@ def test_concurrent_duplicate_confirmations_and_failed_delivery_keep_one_write(t
         try:
             await h.submit('创建测试会议')
             send=h.adapter.send_text
-            async def fail(ref,text):return SendResult(ok=False,error='模拟微信失败')
+            async def fail(ref,text,**kwargs):return SendResult(ok=False,error='模拟微信失败')
             h.adapter.send_text=fail
             await asyncio.gather(h.submit('1',key='confirm-a'),h.submit('1',key='confirm-b'))
             assert len(h.native.writes)==1

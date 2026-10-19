@@ -158,9 +158,10 @@ async def test_desktop_first_setup_auth_login_repair_restart_and_confirm(tmp_pat
         profile=next((root/'users').glob('*/user.md'))
         assert profile.read_text()=='PROFILE_PACKAGE_TEST: concise answers'
         d.stop();await d.start();await d.wait(lambda:d.get()['running'])
-        d.model.script=['偏好已恢复。'];count=len(d.services.sent)
+        d.model.script=['偏好已恢复。\n\n会继续按你的习惯来。'];count=len(d.services.sent)
         d.services.push('memory-resume','我的偏好是什么')
-        await d.wait(lambda:len(d.services.sent)>count)
+        await d.wait(lambda:len(d.services.sent)>=count+2)
+        assert [message['msg']['item_list'][0]['text_item']['text'] for message in d.services.sent[count:]]==['偏好已恢复。','会继续按你的习惯来。']
         assert 'PROFILE_PACKAGE_TEST' in json.dumps(d.model.requests[-1])
         assert 'PROFILE_PACKAGE_TEST' not in str(d.model.requests[-1].get('system'))
         await d.action('stop');assert not d.get()['running']

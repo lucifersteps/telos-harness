@@ -97,6 +97,8 @@ async def send_text_in_bubbles(
     *,
     max_bubbles: int,
     max_text_chars: int,
+    split_multiline: bool = False,
+    protected_text: str = "",
 ) -> SendResult:
     """Split ``text`` into bubbles/chunks and deliver them one by one.
 
@@ -104,7 +106,9 @@ async def send_text_in_bubbles(
     """
 
     parts: list[str] = []
-    for bubble in split_message_bubbles(text, max_bubbles=max_bubbles):
+    bubbles = (split_reply_bubbles(text, max_bubbles=max_bubbles, protected_text=protected_text)
+               if split_multiline else split_message_bubbles(text, max_bubbles=max_bubbles))
+    for bubble in bubbles:
         parts.extend(split_text_by_length(bubble, max_text_chars))
     last = SendResult(ok=True)
     sent_count = 0
@@ -122,6 +126,26 @@ async def send_text_in_bubbles(
             )
         sent_count += 1
     return SendResult(ok=True, message_id=last.message_id, message_count=sent_count)
+
+
+def split_reply_bubbles(text: str, *, max_bubbles: int = 8, protected_text: str = "") -> list[str]:
+    """One thought per bubble, with the authoritative preview kept intact.
+
+    This is only presentation: no extra model turns, markers or persisted state.
+    Excess chat lines are joined rather than silently discarded.
+    """
+    def chat(content: str) -> list[str]:
+        lines = [line.strip() for line in content.splitlines()
+                 if line.strip() and not _BUBBLE_SEPARATOR_RE.fullmatch(line)]
+        limit = max(1, max_bubbles)
+        if len(lines) > limit:
+            lines[limit - 1:] = [" ".join(lines[limit - 1:])]
+        return lines
+
+    if protected_text and protected_text in text:
+        before, _, after = text.partition(protected_text)
+        return [*chat(before), protected_text, *chat(after)]
+    return chat(text)
 
 
 def compact_json(payload: dict[str, Any]) -> str:

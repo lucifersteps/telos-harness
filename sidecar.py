@@ -44,7 +44,7 @@ def wechat_config(config,store):
         base_url=value.get('base_url','https://ilinkai.weixin.qq.com'),
         cdn_base_url=value.get('cdn_base_url','https://novac2c.cdn.weixin.qq.com/c2c'),
         allowed_users=[account.user_id] if account and account.user_id else [],
-        dm_policy='allowlist',group_policy='disabled',split_multiline_messages=False)
+        dm_policy='allowlist',group_policy='disabled',split_multiline_messages=True)
 
 
 class WeChatChannel(Channel):

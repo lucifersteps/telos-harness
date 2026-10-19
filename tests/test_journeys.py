@@ -19,7 +19,7 @@ def test_query_preview_confirm(tmp_path):
         try:
             await h.submit('创建测试会议，同时告诉我提醒事项')
             assert h.runtime.business.pending(h.session)['kind']=='approval'
-            assert '买菜' in h.sent[-1] and not h.native.writes
+            assert h.sent==['提醒事项有买菜。',h.runtime.business.pending(h.session)['text']] and not h.native.writes
             await h.submit('1',key='confirmed')
             assert len(h.native.writes)==1 and '已创建成功' in h.sent[-1]
             await h.submit('1',key='confirmed')
@@ -150,7 +150,7 @@ def test_native_session_restart_keeps_history_and_does_not_duplicate_write(tmp_p
             await h.submit('创建跨进程测试会议')
             send=h.adapter.send_text
             if stage=='saved-undelivered':
-                async def fail(ref,text):return SendResult(ok=False,error='模拟失败')
+                async def fail(ref,text,**kwargs):return SendResult(ok=False,error='模拟失败')
                 h.adapter.send_text=fail;await h.submit('1',key='confirm');assert len(h.native.writes)==1
             oldpid=h.runtime.proc.pid
             await h.runtime.close();h.runtime=h.restart();h.adapter.send_text=send
@@ -187,7 +187,7 @@ def test_preview_delivery_failure_cannot_authorize_write(tmp_path):
         h=Harness(tmp_path,[call('p',draft()),'请确认。'])
         try:
             send=h.adapter.send_text
-            async def fail(ref,text):return SendResult(ok=False,error='模拟失败')
+            async def fail(ref,text,**kwargs):return SendResult(ok=False,error='模拟失败')
             h.adapter.send_text=fail
             await h.submit('添加会议',key='initial');await h.submit('1')
             assert not h.native.writes

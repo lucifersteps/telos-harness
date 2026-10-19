@@ -67,3 +67,19 @@ def test_empty_output_and_recovery_do_not_send_status_messages(tmp_path):
                 assert db.execute('SELECT reply,delivered FROM messages WHERE id=?',('crashed',)).fetchone()==('',1)
         finally:await h.close()
     asyncio.run(run())
+
+
+def test_chat_and_preview_share_reply_but_not_bubbles(tmp_path):
+    async def run():
+        h=Harness(tmp_path,[call('preview',draft())])
+        h.model.script.append(lambda _: '好，明天的会议安排如下。\n\n'+h.runtime.business.pending(h.session)['text']+'\n\n另外，记得带上资料。\n不用着急。')
+        try:
+            await h.submit('安排会议，也提醒我带资料')
+            pending=h.runtime.business.pending(h.session)
+            assert h.sent==['好，明天的会议安排如下。',pending['text'],'另外，记得带上资料。','不用着急。']
+            assert pending['delivered'] and not h.native.writes
+            h.model.script.append('已处理。')
+            await h.submit('1')
+            assert len(h.native.writes)==1
+        finally:await h.close()
+    asyncio.run(run())

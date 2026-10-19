@@ -213,7 +213,9 @@ class Business:
             with self.db() as db:db.execute('UPDATE messages SET delivered=1 WHERE id=?',(key,))
             return
         token=delivery_log_context.set({'delivery_id':key,'input_event_ids':[key]})
-        try:result=await adapter.send_text(ref,row[0])
+        pending=self.pending(session)
+        preview=pending.get('text','') if pending and pending['kind']=='approval' else ''
+        try:result=await adapter.send_text(ref,row[0],**({'protected_text':preview} if preview else {}))
         finally:delivery_log_context.reset(token)
         if not result.ok:return
         with self.db() as db:db.execute('UPDATE messages SET delivered=1 WHERE id=?',(key,))

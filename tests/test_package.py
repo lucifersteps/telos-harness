@@ -20,7 +20,7 @@ from support import Apple,Model,call,draft
 from runtime import ROOT,launch_args
 from settings import read_config,write_config
 
-ARCHIVE=ROOT/'dist/telos-harness-0.4.5-macos-arm64.tgz'
+ARCHIVE=ROOT/'dist/telos-harness-0.4.6-macos-arm64.tgz'
 pytestmark=pytest.mark.skipif(not ARCHIVE.exists(),reason='先构建插件归档')
 
 def run_async(fn):

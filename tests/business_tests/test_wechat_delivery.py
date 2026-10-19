@@ -167,3 +167,47 @@ def test_transport_failure_and_cancellation_are_not_success(monkeypatch, caplog,
         if failure == 'http':
             assert events(caplog, 'wechat.send.http_failed')[0].http_status == 503
     assert not events(caplog, 'wechat.send.response')
+
+
+def test_chat_lines_and_complete_preview_are_separate_bubbles():
+    from telos.adapters.wechat.outbound import WeChatOutbound
+    sent = []
+    async def send(ref, text):
+        from telos.adapters.base import SendResult
+        sent.append(text)
+        return SendResult(ok=True)
+    preview = '操作预览\n创建：会议\n\n时间：明天 10:00–11:00\n---\n回复 1 确认，2 取消'
+    async def run():
+        outbound = WeChatOutbound(config=WeChatConfig(), send_text_fn=send)
+        return await outbound.send_text(ConversationRef(platform='wechat', chat_id='user'),
+            '好，安排在明天。\n\n'+preview+'\n\n另外记得带上资料。\n别太赶啦。', protected_text=preview)
+    result = asyncio.run(run())
+    assert result.ok and result.message_count == 4
+    assert sent == ['好，安排在明天。', preview, '另外记得带上资料。', '别太赶啦。']
+
+
+def test_chat_bubble_limit_keeps_all_content_and_no_newlines():
+    from telos.adapters.delivery import split_reply_bubbles
+    lines = [f'第{i}句话。' for i in range(12)]
+    bubbles = split_reply_bubbles('\n\n'.join(lines), max_bubbles=8)
+    assert len(bubbles) == 8
+    assert all('\n' not in part for part in bubbles)
+    assert ' '.join(bubbles) == ' '.join(lines)
+    assert split_reply_bubbles('你好\r\n\r\n---\n今天怎么样？') == ['你好', '今天怎么样？']
+
+
+def test_partial_preview_delivery_does_not_send_followup():
+    from telos.adapters.wechat.outbound import WeChatOutbound
+    from telos.adapters.base import SendResult
+    sent = []
+    preview = '操作预览\n内容\n确认'
+    async def send(ref, text):
+        sent.append(text)
+        return SendResult(ok=text != preview, error='simulated rejection' if text == preview else '')
+    async def run():
+        return await WeChatOutbound(config=WeChatConfig(), send_text_fn=send).send_text(
+            ConversationRef(platform='wechat', chat_id='user'),
+            '先看一下\n'+preview+'\n其他补充', protected_text=preview)
+    result = asyncio.run(run())
+    assert not result.ok and result.message_count == 1
+    assert sent == ['先看一下', preview]
