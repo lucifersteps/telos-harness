@@ -24,19 +24,19 @@ def delivery_fingerprint(value: str) -> str:
 _BUBBLE_SEPARATOR_RE = re.compile(r"^[ \t]*-{3,}[ \t]*$", re.MULTILINE)
 
 
-def split_message_bubbles(text: str, max_bubbles: int = 8) -> list[str]:
+def split_message_bubbles(text: str, max_bubbles: int | None = 8) -> list[str]:
     content = str(text or "").strip()
     if not content:
         return []
     if "```" in content:
         bubbles = _split_separators_outside_code_fences(content)
-        return (bubbles or [content])[: max(1, max_bubbles)]
+        return (bubbles or [content]) if max_bubbles is None else (bubbles or [content])[: max(1, max_bubbles)]
     bubbles = [
         segment.strip()
         for segment in _BUBBLE_SEPARATOR_RE.split(content)
         if segment.strip()
     ]
-    return (bubbles or [content])[: max(1, max_bubbles)]
+    return (bubbles or [content]) if max_bubbles is None else (bubbles or [content])[: max(1, max_bubbles)]
 
 
 def _split_separators_outside_code_fences(content: str) -> list[str]:
@@ -95,7 +95,7 @@ async def send_text_in_bubbles(
     ref: ConversationRef,
     text: str,
     *,
-    max_bubbles: int,
+    max_bubbles: int | None,
     max_text_chars: int,
     split_multiline: bool = False,
     protected_text: str = "",
@@ -106,7 +106,7 @@ async def send_text_in_bubbles(
     """
 
     parts: list[str] = []
-    bubbles = (split_reply_bubbles(text, max_bubbles=max_bubbles, protected_text=protected_text)
+    bubbles = (split_reply_bubbles(text, protected_text=protected_text)
                if split_multiline else split_message_bubbles(text, max_bubbles=max_bubbles))
     for bubble in bubbles:
         parts.extend(split_text_by_length(bubble, max_text_chars))
@@ -128,18 +128,15 @@ async def send_text_in_bubbles(
     return SendResult(ok=True, message_id=last.message_id, message_count=sent_count)
 
 
-def split_reply_bubbles(text: str, *, max_bubbles: int = 8, protected_text: str = "") -> list[str]:
+def split_reply_bubbles(text: str, *, protected_text: str = "") -> list[str]:
     """One thought per bubble, with the authoritative preview kept intact.
 
     This is only presentation: no extra model turns, markers or persisted state.
-    Excess chat lines are joined rather than silently discarded.
+    All chat lines are delivered without a bubble count limit.
     """
     def chat(content: str) -> list[str]:
         lines = [line.strip() for line in content.splitlines()
                  if line.strip() and not _BUBBLE_SEPARATOR_RE.fullmatch(line)]
-        limit = max(1, max_bubbles)
-        if len(lines) > limit:
-            lines[limit - 1:] = [" ".join(lines[limit - 1:])]
         return lines
 
     if protected_text and protected_text in text:

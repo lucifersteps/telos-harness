@@ -21,7 +21,7 @@ class WeChatConfig:
     split_multiline_messages: bool = True
     image_followup_wait_seconds: int = 30
     max_text_chars: int = 1900
-    max_bubbles: int = 8
+    max_bubbles: int | None = None
 
     @classmethod
     def from_env(cls) -> "WeChatConfig":

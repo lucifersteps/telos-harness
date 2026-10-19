@@ -186,11 +186,11 @@ def test_chat_lines_and_complete_preview_are_separate_bubbles():
     assert sent == ['好，安排在明天。', preview, '另外记得带上资料。', '别太赶啦。']
 
 
-def test_chat_bubble_limit_keeps_all_content_and_no_newlines():
+def test_chat_has_no_bubble_count_limit():
     from telos.adapters.delivery import split_reply_bubbles
     lines = [f'第{i}句话。' for i in range(12)]
-    bubbles = split_reply_bubbles('\n\n'.join(lines), max_bubbles=8)
-    assert len(bubbles) == 8
+    bubbles = split_reply_bubbles('\n\n'.join(lines))
+    assert bubbles == lines
     assert all('\n' not in part for part in bubbles)
     assert ' '.join(bubbles) == ' '.join(lines)
     assert split_reply_bubbles('你好\r\n\r\n---\n今天怎么样？') == ['你好', '今天怎么样？']
@@ -211,3 +211,23 @@ def test_partial_preview_delivery_does_not_send_followup():
     result = asyncio.run(run())
     assert not result.ok and result.message_count == 1
     assert sent == ['先看一下', preview]
+
+
+@pytest.mark.parametrize('split_multiline', [True, False])
+def test_wechat_sends_all_bubbles_with_default_config(split_multiline):
+    from telos.adapters.wechat.outbound import WeChatOutbound
+    from telos.adapters.base import SendResult
+    sent = []
+    lines = [f'完整想法 {i}。' for i in range(12)]
+    preview = '操作预览\n标题：测试会议\n回复 1 确认'
+    async def send(ref, text):
+        sent.append(text)
+        return SendResult(ok=True)
+    async def run():
+        text = '\n\n'.join(lines) + '\n' + preview + '\n' + '\n'.join(lines) if split_multiline else '\n---\n'.join(lines)
+        return await WeChatOutbound(config=WeChatConfig(split_multiline_messages=split_multiline), send_text_fn=send).send_text(
+            ConversationRef(platform='wechat', chat_id='user'), text, protected_text=preview if split_multiline else '')
+    result = asyncio.run(run())
+    assert result.ok
+    assert sent == ([*lines, preview, *lines] if split_multiline else lines)
+    assert result.message_count == len(sent)
