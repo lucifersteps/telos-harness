@@ -77,7 +77,7 @@ def test_native_skill_and_only_expected_tools_are_available(tmp_path):
         try:
             await h.submit('先查看地图功能的使用方法')
             names={x['name'] for x in h.model.requests[0]['tools']}
-            assert names=={'personalPlan','ask_user','baidu_maps','todo_write','skill'}
+            assert names=={'personalPlan','ask_user','baidu_maps','todo_write','skill','user_memory'}
             first=json.dumps(h.model.requests[0],ensure_ascii=False)
             last=json.dumps(h.model.requests[-1],ensure_ascii=False)
             assert 'baidu-ai-map' in first and '<skill_content name=' not in first

@@ -249,3 +249,13 @@ SHA-256：`710900c8733ecc291ae8b30525f3aa480983fd46215ee8b1d9679f80555b9891`
 - 只在独立诊断脚本中增加“等待模拟服务器的旧轮询结束”，相同归档的首次配置、重启、升级及重复确认连续 3 次通过。没有修改插件，也没有将原始完整回归的失败改记为通过。测试模拟器的该竞态仍需在测试源码中修复。
 
 当时的结论：桌面应用提供的运行时可承载 0.2.0 插件，但该版本桌面界面入口尚不兼容。下一步应适配启动参数和首次配置，保留已有业务工具、确认与防重复写入；不需要替换 Harness 循环。
+
+## 2026-10-19 — 0.4.5 原生用户文件记忆
+
+接入前已将 0.4.4 提交并推送到私有仓库，备份提交 `60ba5e0`。每用户目录由渠道、租户和用户 ID 生成；模型不能选路径。DSH agent-instructions 负责文件检查、去重、更新和恢复。Desktop 独立挂载；CLI 复用已有加载器，用到 user.md 的符号链接接入其候选文件名，避免双加载器基线互相替换。
+
+工具使用 DSH atomic-write 的文件锁和原子写入，完整内容与 expected_content 比较后提交，1,375 Unicode 码点上限，不截断。未新增刷新状态机或压缩策略。
+
+验证：源码回归 238 passed / 42 skipped，另补旧会话工作目录迁移 1 passed；安装包/实际隔离 Desktop/媒体回归 17 passed / 2 skipped / 1 旧工具列表断言失败，修正预期新增 user_memory 后该项复查 1 passed。覆盖多用户和多租户隔离、同用户跨会话共享、外部修改、同内容重写去重、动态时间/pending/receipt 变化、Unicode 字符边界、冲突不覆盖、清空、重启恢复、原生压缩与旧会话迁移。Desktop 安装包测试实际通过微信模拟协议调用 user_memory，退出后重新启动宿主验证资料进入用户消息而非系统提示词。
+
+报告：reports/memory-source.log、reports/memory-regression.log、reports/memory-migration.log、reports/memory-package.log、reports/memory-package-recheck.log。安装包重建 Python 组件，Apple 已签名可执行文件与 0.4.4 哈希一致。

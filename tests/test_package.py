@@ -20,7 +20,7 @@ from support import Apple,Model,call,draft
 from runtime import ROOT,launch_args
 from settings import read_config,write_config
 
-ARCHIVE=ROOT/'dist/telos-harness-0.4.4-macos-arm64.tgz'
+ARCHIVE=ROOT/'dist/telos-harness-0.4.5-macos-arm64.tgz'
 pytestmark=pytest.mark.skipif(not ARCHIVE.exists(),reason='先构建插件归档')
 
 def run_async(fn):
@@ -146,7 +146,7 @@ async def test_installed_first_setup_restart_upgrade_and_no_duplicate(tmp_path):
         h.services.push('unauthorized','恶意请求',user='other');h.services.push('request','添加测试会议')
         await h.wait(lambda:len(h.services.sent)>=1)
         assert not h.services.apple.writes
-        assert {t['name'] for t in h.model.requests[0]['tools']}=={'personalPlan','ask_user','baidu_maps','todo_write','skill'}
+        assert {t['name'] for t in h.model.requests[0]['tools']}=={'personalPlan','ask_user','baidu_maps','todo_write','skill','user_memory'}
         assert '<skill_content name=' in json.dumps(h.model.requests[1],ensure_ascii=False)
         h.stop()
         # The business preview and official history survive a real process restart.

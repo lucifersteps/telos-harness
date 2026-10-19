@@ -139,7 +139,7 @@ async def test_desktop_first_setup_auth_login_repair_restart_and_confirm(tmp_pat
             reply=db.execute('SELECT reply FROM messages ORDER BY rowid DESC LIMIT 1').fetchone()[0]
             assert reply==pending['text']
         assert list((d.home/'sessions').glob('*/*/session.v*.jsonl.zstd'))
-        assert {x['name'] for x in d.model.requests[0]['tools']}=={'personalPlan','ask_user','baidu_maps','todo_write','skill'}
+        assert {x['name'] for x in d.model.requests[0]['tools']}=={'personalPlan','ask_user','baidu_maps','todo_write','skill','user_memory'}
         d.stop();await d.start();await d.wait(lambda:d.get()['running'])
         d.services.push('confirm','1');await d.wait(lambda:len(d.services.apple.writes)==1 and len(d.services.sent)>1)
         assert '你叫黎曼' in json.dumps(d.model.requests[-1],ensure_ascii=False)
@@ -151,6 +151,18 @@ async def test_desktop_first_setup_auth_login_repair_restart_and_confirm(tmp_pat
         await d.wait(lambda:len(d.services.sent)>count)
         with sqlite3.connect(root/'business.sqlite') as db:
             assert db.execute('SELECT reply FROM messages ORDER BY rowid DESC LIMIT 1').fetchone()[0]=='请问是哪座城市？'
+        d.model.script=[call('memory-read',{'action':'read'},name='user_memory'),
+                        call('memory-write',{'action':'write','content':'PROFILE_PACKAGE_TEST: concise answers','expected_content':''},name='user_memory'),'已保存偏好。']
+        count=len(d.services.sent);d.services.push('memory-save','记住我的回答偏好')
+        await d.wait(lambda:len(d.services.sent)>count)
+        profile=next((root/'users').glob('*/user.md'))
+        assert profile.read_text()=='PROFILE_PACKAGE_TEST: concise answers'
+        d.stop();await d.start();await d.wait(lambda:d.get()['running'])
+        d.model.script=['偏好已恢复。'];count=len(d.services.sent)
+        d.services.push('memory-resume','我的偏好是什么')
+        await d.wait(lambda:len(d.services.sent)>count)
+        assert 'PROFILE_PACKAGE_TEST' in json.dumps(d.model.requests[-1])
+        assert 'PROFILE_PACKAGE_TEST' not in str(d.model.requests[-1].get('system'))
         await d.action('stop');assert not d.get()['running']
         original=(root/'config.json').read_bytes()
         d.post('save',max_steps=24,persona='unknown');await d.wait(lambda:not d.get()['busy'])
@@ -251,7 +263,7 @@ async def test_native_models_tool_switches_apply_and_restart(tmp_path):
         d.services.push('disabled-tools','今天你好，请继续聊天。')
         await d.wait(lambda:len(d.services.sent)>0)
         names={t['function']['name'] if 'function' in t else t['name'] for t in d.model.requests[-1]['tools']}
-        assert names=={'ask_user','skill','todo_write'}
+        assert names=={'ask_user','skill','todo_write','user_memory'}
         assert all('baidu-ai-map' not in block for block in re.findall(r'<available_skills>(.*?)</available_skills>',json.dumps(d.model.requests[-1],ensure_ascii=False),re.S))
         assert d.model.requests[-1]['model']=='test-model' and d.get()['defaultModel']==original_default
         before=(root/'config.json').read_bytes()

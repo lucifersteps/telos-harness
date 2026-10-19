@@ -11,12 +11,13 @@ import BasicCompaction from '@deepseek-ai/dsh-compaction-basic';
 import ToolResultPruner from '@deepseek-ai/dsh-compaction-tool-result-pruner';
 import * as Apple from './apple.mjs';
 import * as Maps from './maps.mjs';
+import {mountUserMemory} from './memory.mjs';
 export const name='telos-wechat';
-export const inject=['agents','systemPrompt','attachments','agentDefaultModel','telosBusiness'];
+export const inject=['agents','systemPrompt','attachments','agentDefaultModel','telosBusiness','workingDirectory','tools'];
 export async function apply(ctx) {
   const service=ctx.telosBusiness;
   const {prompt}=await post(service,'/boot',{});
-  async function setup(scope,agent) {
+  async function setup(scope,agent,memoryDirectory) {
     let businessContext;
     // Desktop moves compaction out of dsh-base into UI presets. WeChat creates
     // agents directly, so mount the same native backend in this agent's scope.
@@ -29,6 +30,7 @@ export async function apply(ctx) {
     // Complete, composed rules + selected persona belong only to this WeChat scope.
     // Native resume runs the same setup, without rewriting history or business state.
     scope.systemPrompt.section({name:'telos:rules',order:0,text:prompt,complete:true,interpolate:false});
+    await mountUserMemory(scope,agent,memoryDirectory);
     {
       await scope.plugin(SkillFilesystem,{customSkillDirs:service.tools?.maps===false?[]:[service.skillsDir],includeDefaultRoots:true,watch:false});
       await scope.plugin(SkillTool);
@@ -56,16 +58,19 @@ export async function apply(ctx) {
   // A cache of native handles, including in-flight creation; never an input queue.
   const sessions=new Map();
   async function open(id,resume) {
+    const {directory}=await post(service,'/memory-profile',{session:id});
+    if(sessions.has(id)&&sessions.get(id).directory!==directory)throw new Error('Session user identity changed');
     if(!sessions.has(id)) {
       const agentOptions=service.modelSelection??ctx.agentDefaultModel.currentSelection();
-      const task=(resume?ctx.agents.resume({resumeSessionId:id,agentOptions,setup}):
-        ctx.agents.create({sessionId:id,meta:{cwd:process.cwd()},agentOptions,setup}));
-      sessions.set(id,task);task.catch(()=>sessions.delete(id));
+      const configure=(scope,agent)=>setup(scope,agent,directory);
+      const task=(resume?ctx.agents.resume({resumeSessionId:id,agentOptions,setup:configure}):
+        ctx.agents.create({sessionId:id,meta:{cwd:directory},agentOptions,setup:configure}));
+      sessions.set(id,{directory,task});task.catch(()=>sessions.delete(id));
     }
-    return sessions.get(id);
+    return sessions.get(id).task;
   }
   ctx.effect(()=>async()=>{
-    for(const task of sessions.values()){try {await (await task).dispose();} catch {}}
+    for(const {task} of sessions.values()){try {await (await task).dispose();} catch {}}
     sessions.clear();
   });
   const server=createServer(async(req,res)=>{

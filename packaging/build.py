@@ -16,7 +16,8 @@ ROOT=Path(__file__).resolve().parents[1]
 def run(*args):subprocess.run([str(a) for a in args],check=True,cwd=ROOT)
 
 def main():
-    parser=argparse.ArgumentParser();parser.add_argument('--version',default='0.4.4');parser.add_argument('--reuse-components',action='store_true')
+    parser=argparse.ArgumentParser();parser.add_argument('--version',default='0.4.5');parser.add_argument('--reuse-components',action='store_true')
+    parser.add_argument('--reuse-apple',action='store_true',help='Preserve the existing signed Apple component while rebuilding Python')
     parser.add_argument('--sign-identity',default='-',help='Developer ID Application identity; - is local ad-hoc validation only')
     args=parser.parse_args()
     if platform.system()!='Darwin' or platform.machine()!='arm64':raise SystemExit('当前构建目标仅支持 macOS Apple Silicon。')
@@ -40,6 +41,7 @@ def main():
             '--distpath',build/'components','--workpath',build/'pyinstaller','--specpath',build,
             '--paths',ROOT/'checkout/src','--paths',ROOT,'--add-data',f'{ROOT}/personal_prompt.md:.',
             ROOT/'sidecar.py')
+    if not (args.reuse_components or args.reuse_apple):
         app=build/'native/Telos Harness Apple.app';contents=app/'Contents';exe=contents/'MacOS/telos-apple'
         exe.parent.mkdir(parents=True,exist_ok=True)
         info={'CFBundleIdentifier':'com.telos.harness.apple','CFBundleName':'Telos Apple','CFBundleDisplayName':'Telos Apple',

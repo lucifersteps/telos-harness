@@ -1,6 +1,7 @@
 """业务通道：收件、确认与投递。由 Harness 插件启动，不启动模型运行时。"""
 from __future__ import annotations
 import asyncio
+import hashlib
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler,ThreadingHTTPServer
 import json
@@ -51,6 +52,12 @@ class Channel:
             if not self.ready.done():self.ready.set_result(data['url'])
             return {}
         if path=='/boot':return {'tools':self.business.schemas(data.get('family')),'prompt':self.prompt}
+        if path=='/memory-profile':
+            ref=self.refs[data['session']]
+            if not ref.user_id:raise ValueError('User identity is required for personal memory')
+            identity=json.dumps([ref.platform,ref.tenant_id,ref.user_id],ensure_ascii=False,separators=(',',':'))
+            key=hashlib.sha256(identity.encode()).hexdigest()
+            return {'directory':str((self.root/'users'/key).resolve())}
         if path=='/prepare':return await self.prepare(data['session'],data['messages'])
         if path=='/context':return await self.business.context(data['session'])
         if path=='/tool':return await self.business.execute(data['session'],data['id'],data['name'],data['args'],

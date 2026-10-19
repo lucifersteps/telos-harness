@@ -1,6 +1,6 @@
 # Telos Harness 插件（隔离预览版）
 
-0.4.4 适用于 macOS 14+ Apple Silicon、官方 Node/CLI 或官网桌面版 DeepSeek Harness 0.2.1-rc.2。安装包包含 Python 运行环境和编译后的 Apple helper，不需要用户安装 Python、Homebrew 或 Xcode。
+0.4.5 适用于 macOS 14+ Apple Silicon、官方 Node/CLI 或官网桌面版 DeepSeek Harness 0.2.1-rc.2。安装包包含 Python 运行环境和编译后的 Apple helper，不需要用户安装 Python、Homebrew 或 Xcode。
 
 ## 职责与依赖
 
@@ -12,7 +12,7 @@ Telos 只提供微信收发、Apple/百度地图工具、随包 Skill 内容、�
 
 ## 桌面版
 
-1. 在“插件 → 添加插件”安装 `telos-harness-0.4.4-macos-arm64.tgz` 并启用。
+1. 在“插件 → 添加插件”安装 `telos-harness-0.4.5-macos-arm64.tgz` 并启用。
 2. 在 Telos 页选择模型：跟随 DSH 默认模型、使用 DeepSeek 账号、选择已有 API 模型，或展开“添加其他 API 模型”。账号登录直接打开 DSH 原生入口；API 模型支持 OpenAI Chat Completions、Responses 与 Anthropic Messages 协议。
 3. 在页面输入模型 API Key 或百度 Token，点击“保存到 DSH”。凭据直接调用 DSH credentials 服务，不经过 Telos 后端、不进入 Telos 配置或聊天，也不回显已存密钥。添加的 API Provider 通过 DSH settings 持久化；微信独立模型选择不会改变宿主默认模型。无模型列表时保存 Key 后刷新目录，也可手动填写准确的模型 ID。
 4. 选择微信人设，按需开启 Apple 和百度地图，点击“保存并应用”。运行中应用配置会短暂重启 Telos，保留历史、待确认操作和防重复写入记录。
@@ -57,7 +57,7 @@ BAIDU_MAP_AUTH_TOKEN=填写自己的地图令牌
 安装并运行：
 
 ```sh
-dsh plugin --profile telos add telos-harness@file:/path/to/telos-harness-0.4.4-macos-arm64.tgz --offline
+dsh plugin --profile telos add telos-harness@file:/path/to/telos-harness-0.4.5-macos-arm64.tgz --offline
 dsh --profile telos --telos-setup
 dsh --profile telos --telos-login
 dsh --profile telos --telos-authorize
@@ -125,3 +125,13 @@ dsh --profile telos --telos-persona-file "/absolute/path/my-persona.md"
 Apple 写入仍须用户文字确认、预览送达与版本校验，并保留防重复写入账本。图片交给 DSH 原生附件和模型视觉能力；语音经 Telos 下载、解密并转为 WAV 后调用 DSH 已配置的识别服务。识别失败不猜测音频内容，语音不能代替文字确认。Telos 临时媒体处理后删除，进入 DSH 的图片保留遵循其原生规则。
 
 安装包包含可选的通用黎曼人设，不含个人密钥、微信状态、个人资料或历史。当前为 ad-hoc 签名，尚未做 Developer ID 公证或另一台实体 Mac 验证。现有微信机器人不会自动切换。
+
+## 用户记忆
+
+每个微信用户的文件位于 `$TELOS_HOME/users/<hash>/user.md`（默认 `$DSH_HOME/telos/users/<hash>/user.md`）。哈希由渠道、租户和用户标识生成，模型不能选择用户或文件路径；同一用户的不同会话共享资料，不同用户和租户隔离。旧会话在下次收到消息时通过 DSH 原生工作目录变更切换到自己的目录，原会话历史继续恢复。
+
+Agent 通过 `user_memory` 的 read/write 维护小型 Markdown 文件；write 提交完整新内容及上次读取的 expected_content，空内容表示清空。上限为 1,375 个 Unicode 码点，包含格式与空白；超限返回错误，由 Agent 合并精简后重试，不自动丢弃内容。DSH 原生文件锁和原子写入用于避免并发覆盖。
+
+文件由 DSH 的 agent-instructions 加载器独立检查，内容变化才在消息末尾追加新版；时间、pending、receipt 不触发它重复注入。旧版本保留在历史中，新版声明优先；正常压缩移除文件上下文后会重新加载当前文件。该文件在模型中作为用户偏好指引使用，不能覆盖系统、开发者或用户当前明确指令。仅记录稳定事实、偏好及用户要求保留的信息，不把每轮对话、临时任务或 Apple 快照写入。
+
+文件更新成功不等于历史日志删除：要求忘记会删除文件中的资料，但已有会话仍遵循 DSH 的历史保留规则。用户可以手工编辑文件；工具字符上限约束工具写入，Desktop 的原生加载另有 8 KiB 的上下文预算。CLI 已有全局文件加载器时复用它的配置，以 AGENTS.md（或宿主配置的候选名称）到 user.md 的符号链接接入；没有第二份资料副本，也不改宿主全局设置。没有定时整理、额外模型调用或压缩参数覆盖。
