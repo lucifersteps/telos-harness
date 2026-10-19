@@ -19,10 +19,12 @@ from telos.core.jsonschema import validate_json_schema
 from telos.tools.apple.interaction import create_personal_plan_tool, create_personal_question_tool, personal_result_text
 from telos.tools.apple.repair import payload
 from telos.tools.apple.service import canonical, operation_key
+from settings import runtime_options
 
 
 class Business:
-    def __init__(self, root, apple):
+    def __init__(self, root, apple, config=None):
+        self.enabled=runtime_options(config or {})['tools']
         self.root=Path(root);self.root.mkdir(parents=True,exist_ok=True)
         self.path=self.root/'business.sqlite';self.apple=apple
         with self.db() as db:
@@ -42,7 +44,7 @@ class Business:
         # A request hint concerns draft lineage only; todo ownership stays in Harness.
         for tool in [self.tools['personalPlan']]:
             tool.parameters['properties']['request_mode']={'type':'string','enum':['new','continue']}
-        self.active={}
+        self.active={};self.execution_locks={}
 
     @contextmanager
     def db(self):
@@ -85,6 +87,8 @@ class Business:
 
     def schemas(self,family=None):
         selected={'apple':{'personalPlan','ask_user'},'maps':{'baidu_maps'}}.get(family,set())
+        if not self.enabled['apple']:selected.discard('personalPlan')
+        if not self.enabled['maps']:selected.discard('baidu_maps')
         return [{'name':t.name,'description':t.description,'parameters':t.parameters} for t in self.tools.values() if t.name in selected]
 
     async def request_question(self,request):
@@ -92,22 +96,26 @@ class Business:
         return QuestionResponse(decision='awaiting_input')
 
     async def context(self,session):
-        try:state=await asyncio.to_thread(self.apple.query,{'limit':100})
-        except Exception as e:state={'status':'unavailable','reason':str(e)}
-        return {'external_state':state,'pending':self.pending(session),
+        # DSH appends changed runtime contexts. Keep this contribution small and
+        # stable; current Apple objects are read through personalPlan query/detail.
+        return {'pending':self.pending(session),
                 'receipt':self.active.get(session,{}).get('receipt'),
                 'time':self.active.get(session,{}).get('time')}
 
-    async def execute(self,session,cid,name,args):
-        try:return await self._execute(session,cid,name,args)
+    async def execute(self,session,cid,name,args,*,map_token=None):
+        try:
+            async with self.execution_locks.setdefault(session,asyncio.Lock()):
+                return await self._execute(session,cid,name,args,map_token=map_token)
         except (ToolInputError,ValueError) as error:
             if name=='personalPlan' and isinstance(args,dict) and args.get('action') in {'create','update','delete','batch','revise'}:
                 self.record_draft(session,cid,{k:v for k,v in args.items() if k!='request_mode'},
                                   {'status':'input_error','execution_started':False,'reason':str(error)})
             raise
 
-    async def _execute(self,session,cid,name,args):
+    async def _execute(self,session,cid,name,args,*,map_token=None):
         """唯一模型工具入口：校验和预览。任何模型工具调用都不能直接批准写入。"""
+        if (name=='personalPlan' and not self.enabled['apple']) or (name=='baidu_maps' and not self.enabled['maps']):
+            raise ToolInputError('该工具已关闭，请在 Telos 插件页面启用后再使用。')
         tool=self.tools.get(name)
         if tool is None:raise ToolInputError('工具不存在。')
         error=validate_json_schema(tool.parameters,args)
@@ -129,7 +137,7 @@ class Business:
             with self.db() as db:
                 inputs=db.execute('SELECT input FROM messages WHERE session=? AND rowid<=(SELECT rowid FROM messages WHERE id=?) ORDER BY rowid DESC LIMIT 30',
                                   (session,current['key'])).fetchall()
-            execution=self.maps.resolve(args,state={'task_inputs':[{'text':r[0]} for r in inputs]},records=records)
+            execution=self.maps.resolve(args,state={'task_inputs':[{'text':r[0]} for r in inputs]},records=records,token=map_token)
         else:execution=await tool.resolve_execution(args,context=context)
         if execution.need_confirm:
             preview=execution.approval_preview_value()
@@ -153,6 +161,7 @@ class Business:
 
     async def confirm(self,session):
         """执行原样批准的草稿；沿用原身份和 Apple 幂等账本，不调用模型生成操作。"""
+        if not self.enabled['apple']:return {'status':'disabled','text':'Apple 工具已关闭，本次未写入；请启用后再确认。'}
         pending=self.pending(session)
         if not pending or pending['kind']!='approval' or not pending.get('delivered'):
             return {'status':'deny','text':'当前没有可确认的有效预览，请说明需要的操作。'}
@@ -180,6 +189,7 @@ class Business:
         return result
 
     async def reconcile(self,session,pending):
+        if not self.enabled['apple']:return {'status':'disabled','text':'Apple 工具已关闭，尚未核实上次操作。'}
         preview=pending['preview'];count=len(preview['operations']) if preview['action']=='batch' else 1
         ids=[operation_key(session,pending['origin'],f"{pending['id']}:{i+1}" if preview['action']=='batch' else pending['id']) for i in range(count)]
         try:
@@ -199,6 +209,9 @@ class Business:
     async def deliver(self,session,key,adapter,ref):
         with self.db() as db:row=db.execute('SELECT reply,delivered FROM messages WHERE id=?',(key,)).fetchone()
         if not row or row[0] is None or row[1]:return
+        if not row[0].strip():
+            with self.db() as db:db.execute('UPDATE messages SET delivered=1 WHERE id=?',(key,))
+            return
         token=delivery_log_context.set({'delivery_id':key,'input_event_ids':[key]})
         try:result=await adapter.send_text(ref,row[0])
         finally:delivery_log_context.reset(token)
@@ -209,11 +222,14 @@ class Business:
             pending['delivered']=True;pending['expires_at']=time.time()+600;self.set_pending(session,pending)
 
     def render(self,session,text):
+        pending=self.pending(session)
+        # The model composes the reply from native tool results. Do not append a
+        # second presentation when it paraphrases or omits the exact approval.
+        # Fall back to the authoritative text so confirmation covers what was shown.
+        if pending:
+            presentation=pending.get('text') or pending.get('question','')
+            if presentation and text.count(presentation)!=1:text=presentation
         parts=[text.strip()] if text.strip() else []
         receipt=self.active.get(session,{}).get('receipt') or {}
         if receipt.get('text') and receipt['text'] not in '\n'.join(parts):parts.insert(0,receipt['text'])
-        pending=self.pending(session)
-        if pending:
-            presentation=pending.get('text') or pending.get('question','')
-            if presentation not in '\n'.join(parts):parts.append(presentation)
-        return '\n\n'.join(parts) or '本次处理已结束。'
+        return '\n\n'.join(parts)

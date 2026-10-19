@@ -20,8 +20,8 @@ class Runtime(Channel):
         # The profile installs our channel plugin; SDK JSON-RPC is disabled.
         shutil.copytree(ROOT/'plugin',profiles/'sdk-minimal/node_modules/telos-native-validation',dirs_exist_ok=True)
         package=profiles/'sdk-minimal/node_modules/telos-native-validation'
-        (package/'bootstrap.mjs').write_text("export const name='test-business'; export function apply(ctx){ctx.provide('telosBusiness',{url:process.env.TELOS_BUSINESS_URL,token:process.env.TELOS_BUSINESS_TOKEN,model:process.env.TELOS_MODEL,maxSteps:Number(process.env.TELOS_MAX_STEPS||24)});}")
-        self.env={**os.environ,'DSH_HOME':str(home),'DEEPSEEK_API_KEY':api_key,'DEEPSEEK_BASE_URL':base_url,
+        (package/'bootstrap.mjs').write_text("export const name='test-business'; export function apply(ctx){ctx.provide('telosBusiness',{url:process.env.TELOS_BUSINESS_URL,token:process.env.TELOS_BUSINESS_TOKEN,skillsDir:process.env.TELOS_SKILLS_DIR,maxSteps:Number(process.env.TELOS_MAX_STEPS||24)});}")
+        self.env={**os.environ,'DSH_HOME':str(home),'DSH_AGENTS_HOME':str(home/'agents'),'DEEPSEEK_API_KEY':api_key,'DEEPSEEK_BASE_URL':base_url,
             'TELOS_MODEL':model,'TELOS_BUSINESS_URL':f'http://127.0.0.1:{self.server.server_port}',
             'TELOS_BUSINESS_TOKEN':self.token,'TELOS_MAX_STEPS':str(max_steps),'TELOS_SKILLS_DIR':str(ROOT/'skills')}
         self.command=[*launch_args(),'--profile','sdk-minimal','--patch',str(ROOT/'native.patch.yml')]

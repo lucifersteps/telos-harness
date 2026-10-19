@@ -23,7 +23,7 @@ def draft(title='测试会议'):
 
 class Model:
     def __init__(self,script):
-        self.script=list(script);self.requests=[];owner=self
+        self.script=list(script);self.requests=[];self.input_tokens=10;owner=self
         class Handler(BaseHTTPRequestHandler):
             def log_message(self,*args):pass
             def do_POST(self):
@@ -40,7 +40,7 @@ class Model:
                     self.send_header('Content-Type','text/event-stream');self.end_headers()
                     chunks=[{'type':'message_start','message':{'id':common['id'],'type':'message','role':'assistant',
                         'model':request['model'],'content':[],'stop_reason':None,'stop_sequence':None,
-                        'usage':{'input_tokens':10,'output_tokens':0}}}]
+                        'usage':{'input_tokens':owner.input_tokens,'output_tokens':0}}}]
                     blocks=[]
                     if message.get('content'):blocks.append({'type':'text','text':message['content']})
                     for c in message.get('tool_calls',[]):blocks.append({'type':'tool_use','id':c['id'],
@@ -59,7 +59,7 @@ class Model:
                     if 'tool_calls' in delta:delta['tool_calls']=[{'index':i,**c} for i,c in enumerate(delta['tool_calls'])]
                     chunks=[{**common,'object':'chat.completion.chunk','choices':[{'index':0,'delta':delta,'finish_reason':None}]},
                         {**common,'object':'chat.completion.chunk','choices':[{'index':0,'delta':{},'finish_reason':reason}],
-                         'usage':{'prompt_tokens':10,'completion_tokens':5,'total_tokens':15}}]
+                         'usage':{'prompt_tokens':owner.input_tokens,'completion_tokens':5,'total_tokens':owner.input_tokens+5}}]
                     body=''.join('data: '+json.dumps(x)+'\n\n' for x in chunks)+'data: [DONE]\n\n'
                 else:
                     self.send_header('Content-Type','application/json');self.end_headers()

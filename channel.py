@@ -12,6 +12,8 @@ import threading
 
 import aiohttp
 from business import Business
+from personas import system_prompt
+from settings import read_config
 from telos.agent.tools.types import ToolInputError
 
 ROOT=Path(__file__).resolve().parent
@@ -20,7 +22,8 @@ ROOT=Path(__file__).resolve().parent
 class Channel:
     def __init__(self,root,apple,adapter,*,harness_home=None,token=None,timeout=180,event_sink=None):
         self.root=Path(root);self.root.mkdir(parents=True,exist_ok=True)
-        self.business=Business(self.root,apple);self.adapter=adapter
+        self.prompt=system_prompt(read_config(self.root))
+        self.business=Business(self.root,apple,read_config(self.root));self.adapter=adapter
         self.delivery_locks={};self.loop=asyncio.get_running_loop();self.refs={};self.event_sink=event_sink
         self.ready=self.loop.create_future();self.timeout=timeout
         self.harness_home=Path(harness_home) if harness_home else self.root/'harness'
@@ -47,10 +50,11 @@ class Channel:
         if path=='/ready':
             if not self.ready.done():self.ready.set_result(data['url'])
             return {}
-        if path=='/boot':return {'tools':self.business.schemas(data.get('family')),'prompt':(ROOT/'personal_prompt.md').read_text()}
+        if path=='/boot':return {'tools':self.business.schemas(data.get('family')),'prompt':self.prompt}
         if path=='/prepare':return await self.prepare(data['session'],data['messages'])
         if path=='/context':return await self.business.context(data['session'])
-        if path=='/tool':return await self.business.execute(data['session'],data['id'],data['name'],data['args'])
+        if path=='/tool':return await self.business.execute(data['session'],data['id'],data['name'],data['args'],
+            **({'map_token':data.get('map_token','')} if data['name']=='baidu_maps' else {}))
         raise ValueError('Unknown business endpoint')
 
     async def prepare(self,session,messages):
@@ -81,7 +85,7 @@ class Channel:
         events=[];keys=[key]
         try:
             await asyncio.wait_for(asyncio.shield(self.ready),30)
-            resume=any((self.harness_home/'sessions').glob(f'*/{session}/session.v*.jsonl'))
+            resume=any((self.harness_home/'sessions').glob(f'*/{session}/session.v*.jsonl*'))
             async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=None,sock_connect=15)) as client:
                 async with client.post(self.ready.result()+'/steer',headers={'Authorization':'Bearer '+self.token},
                     json={'session':session,'key':key,'resume':resume,'content':[{'type':'text','text':text},*(blocks or [])]}) as response:
@@ -90,23 +94,30 @@ class Channel:
             if self.event_sink:self.event_sink(events)
             finish=result.get('finish') or {}
             if finish.get('reason',{}).get('kind')!='completed':
-                reply='处理已暂停，已取得的结果保留在会话中；请继续说明未完成的需求。'
+                # Keep actual model output/receipts. Native failures are diagnostics,
+                # not an assistant utterance and not a reason to invent one.
+                logging.error('Harness turn did not complete: %s',json.dumps(finish,ensure_ascii=False))
         except Exception:
             logging.exception('Harness native turn failed')
-            reply='本次处理被中断，原始要求已保留；不会自动重复写入。'
+            reply=''
         # Only delivery is serialized. Input reaches native steer while a turn is running.
         async with self.delivery_locks.setdefault(session,asyncio.Lock()):
             with self.business.db() as db:
-                rows=[db.execute('SELECT id,delivered,reply FROM messages WHERE id=? AND session=?',(k,session)).fetchone() for k in dict.fromkeys(keys)]
+                rows=[db.execute('SELECT id,delivered,reply,input FROM messages WHERE id=? AND session=?',(k,session)).fetchone() for k in dict.fromkeys(keys)]
                 rows=[r for r in rows if r]
                 if not rows or rows[-1][1]:return
                 target=rows[-1][0]
                 receipts=[r[2] for r in rows if r[2] and not r[1]]
-                reply=self.business.render(session,reply)
+                # A control-only turn with no further tool work reports its actual
+                # receipt, not an additional model promise to perform the same save.
+                control_only=receipts and all(r[3].strip() in {'1','确认','同意','2','取消','拒绝','/stop'} for r in rows)
+                if control_only and not any(e.get('type')=='tool/result' for e in events):
+                    reply='\n\n'.join(dict.fromkeys(receipts))
+                else:reply=self.business.render(session,reply)
                 for receipt in receipts:
                     if receipt not in reply:reply=receipt+'\n\n'+reply
                 # Save the combined outbox and retire its input receipts atomically.
-                for earlier,_,_ in rows[:-1]:db.execute("UPDATE messages SET reply='',delivered=1 WHERE id=?",(earlier,))
+                for earlier,_,_,_ in rows[:-1]:db.execute("UPDATE messages SET reply='',delivered=1 WHERE id=?",(earlier,))
                 db.execute('UPDATE messages SET reply=? WHERE id=?',(reply,target))
             await self.business.deliver(session,target,self.adapter,self.refs[session])
 
@@ -120,7 +131,7 @@ class Channel:
                 with self.business.db() as db:db.execute('UPDATE messages SET reply=?,delivered=0 WHERE id=? AND session=?',(receipt['text'],key,session))
         with self.business.db() as db:rows=db.execute('SELECT id,reply FROM messages WHERE session=? AND delivered=0 ORDER BY rowid',(session,)).fetchall()
         for key,reply in rows:
-            if reply is None:self.business.save_reply(key,'上次处理被中断，原始要求已保留；请继续，不会自动重复写入。')
+            if reply is None:self.business.save_reply(key,'')
             await self.business.deliver(session,key,self.adapter,ref)
         # Harness restores its own history/status. Python never rebuilds model messages.
 

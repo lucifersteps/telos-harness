@@ -135,3 +135,15 @@ def test_service_errors_are_not_success(monkeypatch, response, error):
     result = asyncio.run(BaiduMaps(opener=Opener(response,error)).query('weather', {'region':'北京市'}))
     assert result['status'] == 'unavailable'
     assert 'secret-test-token' not in json.dumps(result)
+
+
+def test_per_request_host_token_overrides_environment_without_leaking(monkeypatch):
+    monkeypatch.setenv('BAIDU_MAP_AUTH_TOKEN','old-environment-token')
+    opener=Opener({'status':0,'text':'host-token-one host-token-two'})
+    maps=BaiduMaps(opener=opener)
+    for token in ['host-token-one','host-token-two']:
+        result=asyncio.run(maps.query('weather',{'region':'虚构市'},token=token))
+        assert opener.requests[-1][0].get_header('Authorization')=='Bearer '+token
+        assert token not in json.dumps(result)
+    result=asyncio.run(maps.query('weather',{'region':'虚构市'},token=''))
+    assert result['status']=='unavailable' and len(opener.requests)==2

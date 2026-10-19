@@ -1,83 +1,80 @@
-// Harness owns the component lifecycle. No second model runtime or message queue.
-import {spawn} from 'node:child_process';
+// Harness owns lifecycle, model loop, history and credential persistence.
 import {randomBytes} from 'node:crypto';
 import {readFile,mkdir} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
 import {join,resolve} from 'node:path';
 import {resolveDshHome,expandHomePath} from '@deepseek-ai/dsh-home-paths';
-import * as DeepSeek from '@deepseek-ai/dsh-llm-deepseek-api-key';
-import {prepareVoice} from './voice.mjs';
-import * as SkillFilesystem from '@deepseek-ai/dsh-skill-filesystem';
+import * as WeChat from './index.mjs';
+import {component} from './component.mjs';
+import {voiceStatus} from './voice.mjs';
+import {mountDesktop} from './desktop.mjs';
 export const name='telos-bootstrap';
-export const inject=['cmdlineArgs','credentials','llm','skills','speechToText'];
-export async function apply(ctx) {
-  try {await start(ctx);} catch(error) {console.error('Telos: '+error.message);ctx.get('appExit')(1);}
+export const inject=['cmdlineArgs'];
+export function requireHost(ctx) {
+  const missing=['agents','agentDefaultModel','credentials','skills','attachments'].filter(name=>!ctx.get(name));
+  if(missing.length)throw new Error('DSH 当前配置缺少 '+missing.join(', ')+'；请使用包含 dsh-base 的宿主配置，Telos 不补装通用服务。');
 }
-async function start(ctx) {
-  const pkg=fileURLToPath(new URL('.',import.meta.url));
-  const home=resolveDshHome();
-  const root=resolve(expandHomePath(process.env.TELOS_HOME||join(home,'telos')));
-  const args=ctx.cmdlineArgs.get();
-  const commands={'--telos-setup':'setup','--telos-login':'login','--telos-authorize':'authorize','--telos-status':'status','--telos-prepare-voice':'prepare-voice'};
-  if(args.length && (args.length!==1||!commands[args[0]])) {
-    console.error('Telos: 支持 --telos-setup、--telos-login、--telos-authorize、--telos-status、--telos-prepare-voice；无参数启动微信通道。');
-    ctx.get('appExit')(2);return;
-  }
-  const command=commands[args[0]]||'serve';
-  if(command==='prepare-voice'){await prepareVoice(ctx);ctx.get('appExit')(0);return;}
-  await mkdir(root,{recursive:true,mode:0o700});
-  let config;
-  try {config=JSON.parse(await readFile(join(root,'config.json'),'utf8'));}
-  catch(error) {if(error.code!=='ENOENT')throw error;}
-  if(command==='serve'&&!config)throw new Error('请先运行 dsh --profile sdk-minimal --telos-setup 完成首次配置。');
-  if(config&&config.version!==1)throw new Error('不支持此配置版本；原文件未修改。');
+const commands={'--telos-setup':'setup','--telos-login':'login','--telos-authorize':'authorize','--telos-status':'status'};
+export function commandFor(profile,args) {
+  if(profile==='desktop')return 'desktop'; // Desktop owns its host/port and UI arguments.
+  if(!args.length)return 'serve';
+  if(args.length===1&&commands[args[0]])return commands[args[0]];
+  if(args.length===2&&['--telos-persona','--telos-persona-file'].includes(args[0]))return 'configure';
+  throw new Error('支持 --telos-setup、--telos-login、--telos-authorize、--telos-status、--telos-persona default|liman、--telos-persona-file 文件路径；无参数启动微信通道。');
+}
+export async function readConfig(paths) {
+  try {
+    const config=JSON.parse(await readFile(join(paths.root,'config.json'),'utf8'));
+    if(config.version!==1)throw new Error('不支持此配置版本；原文件未修改。');
+    return config;
+  } catch(error) {if(error.code==='ENOENT')return null;throw error;}
+}
+export async function runtime(ctx,paths,config,onFailure) {
   const token=randomBytes(24).toString('hex');
-  const mapKey=await ctx.credentials.resolve('BAIDU_MAP_AUTH_TOKEN');
-  const env={...process.env,TELOS_BUSINESS_TOKEN:token};
-  if(mapKey)env.BAIDU_MAP_AUTH_TOKEN=mapKey.value;
-  // Setup may reuse native credentials without asking the user to type them again.
-  if(command==='setup')for(const ref of ['DEEPSEEK_API_KEY','BAIDU_MAP_AUTH_TOKEN']) {
-    const hit=await ctx.credentials.resolve(ref);if(hit)env[ref]=hit.value;
-  }
-  const child=spawn(join(pkg,'bin/telos-component'),[command,'--home',root,'--harness-home',home],
-    {cwd:root,env,stdio:[command==='setup'?'inherit':'pipe','pipe','inherit']});
-  let stopping=false;
-  const exited=new Promise(resolve=>child.once('exit',(code,signal)=>resolve({code,signal})));
-  ctx.on('dispose',async()=>{
-    stopping=true;
-    if(child.exitCode===null&&child.signalCode===null){
-      child.kill('SIGTERM');
-      const timer=setTimeout(()=>child.kill('SIGKILL'),8000);
-      await exited;clearTimeout(timer);
-    }
-  });
-  child.once('error',()=>ctx.get('appExit')(1));
-  if(command!=='serve') {
-    let output='';for await(const chunk of child.stdout)output+=chunk;
-    const {code}=await exited;
-    if(code===0){
-      const result=JSON.parse(output);
-      if(command==='setup') {
-        for(const [ref,value] of Object.entries(result.credentials))await ctx.credentials.set(ref,value);
-        if(!await ctx.credentials.resolve('DEEPSEEK_API_KEY'))throw new Error('尚未配置 DeepSeek API Key，请再次运行 --telos-setup。');
-        console.log('Telos 配置已保存；凭据已持久化到 Harness。接着运行 --telos-login 和 --telos-authorize。');
-      } else {
-        if(command==='status')result.voice=ctx.speechToText.snapshot();
-        if(command==='status')result.credentials={model:!!await ctx.credentials.resolve('DEEPSEEK_API_KEY'),maps:!!mapKey};
-        console.log(JSON.stringify(result));
-      }
-    }
-    ctx.get('appExit')(code??1);return;
-  }
-  const ready=await new Promise((resolve,reject)=>{
-    let output='';const timer=setTimeout(()=>reject(new Error('Telos 本机组件启动超时。')),30000);
-    child.once('error',reject);child.once('exit',()=>{clearTimeout(timer);reject(new Error('Telos 本机组件启动失败。'));});
-    child.stdout.on('data',chunk=>{output+=chunk;if(output.includes('\n')){clearTimeout(timer);try{resolve(JSON.parse(output.split('\n')[0]));}catch(error){reject(error);}}});
-  });
+  requireHost(ctx);
+  const child=component(ctx,paths,'serve',{TELOS_BUSINESS_TOKEN:token});
+  let timer;
+  const ready=await Promise.race([child.ready,new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error('Telos 本机组件启动超时。')),30000);})]).finally(()=>clearTimeout(timer));
   if(ready.protocol!==1)throw new Error('Telos 本机组件协议不兼容。');
-  // Stop the host on component failure; the process manager decides whether to restart.
-  exited.then(()=>{if(!stopping)ctx.get('appExit')(1);});
-  ctx.plugin(DeepSeek,{baseURL:config.base_url,thinking:'disabled',streamIdleTimeoutMs:180000});
-  ctx.plugin(SkillFilesystem,{customSkillDirs:[join(pkg,'skills')],includeDefaultRoots:false,watch:false});
-  ctx.provide('telosBusiness',{url:ready.url,token,model:config.model,maxSteps:config.max_steps});
+  child.done.then(()=>{if(!child.stopping)onFailure(new Error('Telos 本机组件已停止。'));},error=>{if(!child.stopping)onFailure(error);});
+  ctx.provide('telosBusiness',{url:ready.url,token,maxSteps:config.max_steps,skillsDir:join(paths.pkg,'skills'),tools:config.tools,modelSelection:config.model_selection});
+  await ctx.plugin(WeChat);
+}
+async function run(ctx) {
+  const home=resolveDshHome();
+  const paths={home,pkg:fileURLToPath(new URL('.',import.meta.url)),root:resolve(expandHomePath(process.env.TELOS_HOME||join(home,'telos')))};
+  const desktop=ctx.get('profileContext')?.name==='desktop';
+  try {
+    await mkdir(paths.root,{recursive:true,mode:0o700});
+    const command=commandFor(desktop?'desktop':'cli',ctx.cmdlineArgs.get());
+    if(desktop){await mountDesktop(ctx,paths,{readConfig,runtime});return;}
+    const config=await readConfig(paths);
+    if(command==='serve') {
+      if(!config)throw new Error('请先运行 --telos-setup 完成首次配置。');
+      await runtime(ctx,paths,config,()=>ctx.get('appExit')(1));return;
+    }
+    const args=ctx.cmdlineArgs.get();
+    const input=command==='configure'?(args[0]==='--telos-persona'?{persona:args[1]}:{persona:'custom',persona_file:args[1]}):undefined;
+    const result=await component(ctx,paths,command,{},input).done;
+    if(command==='setup') {
+      console.log('Telos 配置已保存；模型、凭据和语音请在 DSH 配置。接着运行 --telos-login 和 --telos-authorize。');
+    } else {
+      if(command==='status') {
+        result.voice=voiceStatus(ctx);
+        result.model=config?.model_selection??ctx.get('agentDefaultModel')?.currentSelection()??null;
+      }
+      console.log(JSON.stringify(result));
+    }
+    ctx.get('appExit')(0);
+  } catch(error) {
+    console.error('Telos: '+error.message);
+    // Plugin configuration failures must never take down the desktop Host.
+    if(!desktop)ctx.get('appExit')(1);
+  }
+}
+
+export function apply(ctx) {
+  // Host services may initialize asynchronously. Validate after DSH readiness.
+  const off=ctx.get('appReady').onReady(()=>run(ctx));
+  ctx.effect(()=>off);
 }

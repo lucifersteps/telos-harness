@@ -1,41 +1,127 @@
 # Telos Harness 插件（隔离预览版）
 
-安装在 DeepSeek Harness 0.2.1rc2 的独立 `sdk-minimal` profile。当前包支持 macOS 14+ Apple Silicon；Intel 尚未构建验证。
-组件已包含 Python 运行环境和编译后的 Apple helper，使用者无需安装 Python、Homebrew 或 Xcode。
+0.4.4 适用于 macOS 14+ Apple Silicon、官方 Node/CLI 或官网桌面版 DeepSeek Harness 0.2.1-rc.2。安装包包含 Python 运行环境和编译后的 Apple helper，不需要用户安装 Python、Homebrew 或 Xcode。
+
+## 职责与依赖
+
+Telos 只提供微信收发、Apple/百度地图工具、随包 Skill 内容、确认和防重复写入。DSH 提供循环、历史、模型连接、凭据、Skill 服务、任务清单和可选语音服务。插件只安装一个 Telos 入口，不修改宿主的全局模型、提示词、工具开关或语音选择。
+
+微信会话通过 DSH 原生 setup 使用 Skill 加载器、Skill 工具和 todo 工具；宿主未提供全局压缩服务时，在微信独立作用域挂载原生 compaction-basic 和工具结果修剪组件，沿用默认压缩阈值和超限恢复；这是该会话的原生能力配置，不另建 Skill 注册中心。提示词、业务工具和确认上下文只属于 Telos 创建的会话。微信新消息通过原生 steer 输入。
+
+宿主必须包含 `@deepseek-ai/dsh-base` 的标准服务；旧 `sdk-minimal` 不再支持直接运行此版本。缺少必要服务时 Telos 会明确报错，不自动补装。不启用语音也可以使用文字和图片。
+
+## 桌面版
+
+1. 在“插件 → 添加插件”安装 `telos-harness-0.4.4-macos-arm64.tgz` 并启用。
+2. 在 Telos 页选择模型：跟随 DSH 默认模型、使用 DeepSeek 账号、选择已有 API 模型，或展开“添加其他 API 模型”。账号登录直接打开 DSH 原生入口；API 模型支持 OpenAI Chat Completions、Responses 与 Anthropic Messages 协议。
+3. 在页面输入模型 API Key 或百度 Token，点击“保存到 DSH”。凭据直接调用 DSH credentials 服务，不经过 Telos 后端、不进入 Telos 配置或聊天，也不回显已存密钥。添加的 API Provider 通过 DSH settings 持久化；微信独立模型选择不会改变宿主默认模型。无模型列表时保存 Key 后刷新目录，也可手动填写准确的模型 ID。
+4. 选择微信人设，按需开启 Apple 和百度地图，点击“保存并应用”。运行中应用配置会短暂重启 Telos，保留历史、待确认操作和防重复写入记录。
+5. 微信扫码登录，按需授权 Apple，再点击“启动 Telos”；以后打开应用或重新启用插件会恢复已登录实例。重新扫码和授权前需停止 Telos。
+
+“测试连接”只向所选模型发送一句测试文字，不加载人设、聊天或 Apple 数据，会产生少量模型调用费用。百度功能仍需单独的 `BAIDU_MAP_AUTH_TOKEN`，DeepSeek 账号不包含百度授权。关闭 Apple 会停止后台读取、撤下业务工具并拒绝确认写入；关闭地图会撤下地图工具与随包 Skill 目录。宿主另行安装的 Skill 仍归 DSH 管理，但不能绕过已关闭的执行工具。重新开启不会自动执行草稿，写入仍需用户确认。
+
+CLI 继续使用 DSH 原生凭据服务或 `$DSH_HOME/.env`；不要把凭据放进聊天或 Skill 文件。`$DSH_HOME/telos/config.json` 可保存非敏感的 `model_selection`（provider、model、可选 reasoningEffort；null 表示跟随宿主）与 `tools`（apple、maps 布尔开关），重启后生效。旧配置未指定时保留原行为。
+
+Apple 当前数据通过 personalPlan query/detail 按需读取，运行上下文不重复预载完整日历和提醒事项。待确认内容与实际回执仍在同一步更新，未变化的上下文由 DSH 原生机制去重。旧会话继续由 DSH 恢复和压缩，不删除历史或业务账本。
+
+语音在 DSH 自身配置中启用和准备。Telos 不下载模型、不选择后端，也不自动补装语音服务。既有 DSH 模型文件保留原位。Telos 状态页只显示宿主语音状态。
+
+通过桌面 CLI 替换安装包后，退出并重新打开 DSH，确认 Telos 恢复运行。插件列表中的新版本只说明安装文件已更新，不能证明旧业务进程和已加载的 JavaScript 已换代。升级验收同时核对进程启动时间及安装文件校验值。
+
+通道仅投递模型实际回答、确认预览和操作回执。原生执行错误记录在会话与日志中，不再用固定“暂停/中断/已结束”文本冒充助手回答；没有实际内容时不发送消息。
+
+禁用插件或退出应用会关闭收发和 Telos 会话。配置错误不会关闭整个桌面宿主。
+
+## Node/CLI 版
+
+使用 DSH 原生的独立 profile，由 `dsh-base` 提供基础服务，没有 Web/TUI 或 SDK JSON-RPC 入口。首次创建宿主配置：
 
 ```sh
 export DSH_HOME="$HOME/Library/Application Support/Telos Harness"
-dsh plugin --profile sdk-minimal add telos-harness@file:/path/to/telos-harness-0.2.0-macos-arm64.tgz --offline
-dsh --profile sdk-minimal --telos-setup
-dsh --profile sdk-minimal --telos-login
-dsh --profile sdk-minimal --telos-authorize
-dsh --profile sdk-minimal --telos-status
-dsh --profile sdk-minimal --telos-prepare-voice
-dsh --profile sdk-minimal
+mkdir -p "$DSH_HOME/profiles/telos"
 ```
 
-`--telos-setup` 隐藏输入 API Key，调用 Harness 原生 credentials 服务持久化；不会打印 Key。
-已有 Harness 凭据可直接复用；百度 Token 可留空，路线查询在配置后可用。
-`--telos-login` 显示微信二维码，仅允许登录账号本人私聊，禁用群聊。
-`--telos-authorize` 请求系统日历和提醒事项授权，必须由设备使用者完成。
-不含原作者的模型 Key、地图 Token、微信登录状态、人设或个人数据。
+在 `$DSH_HOME/profiles/telos/package.json` 保存：
 
-数据默认放在 `$DSH_HOME/telos`；可用 `TELOS_HOME` 改变业务数据位置。Harness 历史仍由 `$DSH_HOME` 管理。
-`config.json` 是非敏感配置；凭据由 Harness 管理，微信 Token 在权限受限的业务目录中。
-进程退出时插件关闭本机组件；同一数据目录只允许一个实例，不抢占或终止已有实例。
-关闭整个 Telos bundle 时微信轮询及 Apple/地图工具一起关闭。
+```json
+{"name":"dsh-profile-telos","private":true,"dsh":{"profile":{"bundles":["@deepseek-ai/dsh-base"]}}}
+```
 
-升级前停止该隔离实例，备份整个 `DSH_HOME`（包含凭据、历史、草稿和账本），再用相同命令安装新归档。
-升级只替换插件文件；不重新扫码、不覆盖配置、不移动数据。新版本不支持配置版本时拒绝启动。
-回退同样安装上一版本；若未来版本更改存储格式，应恢复对应备份，不能只降级程序。
-后台常驻由用户自己的进程管理器启动上述 Harness 命令；插件不安装 launchd 服务、不自动接管其他机器人。
+由 DSH 配置模型和凭据。默认模型是 `deepseek-official / deepseek-flash`；可在此 profile 的 `cordis.patch.yml` 配置 DSH 的 `agent-default-model` 和 `llm-deepseek`。凭据可由 DSH 管理，或保存在它原生支持的 `$DSH_HOME/.env`（文件权限设为 600）：
 
-模型循环、历史、todo、Skill 均由原生 Harness 提供。微信新消息只通过 steer 输入。
-Apple 工具只生成预览；实际写入必须通过用户文字确认、送达及版本校验和操作账本。
-图片使用原生附件；本隔离版仍遵循 Harness 的附件存储行为，尚不能替代旧机器人的媒体保留策略。
-语音使用 DSH 官方 `speech-to-text` 服务及 `speech-to-text-sensevoice` 后端，首次执行 `--telos-prepare-voice` 下载校验后的 SenseVoice INT8 和 VAD 模型（约 241 MB）。准备完成后可离线识别，重启复用原生模型目录；`--telos-status` 查看准备状态。不会启用 Web/TUI、麦克风录音、语音输入界面或多 Agent。
-Telos 只下载、解密微信媒体，并通过内置 SILK 编解码器和 macOS `afconvert` 转为 16 kHz、单声道、PCM16 WAV。识别及工作进程由 DSH 管理，不需要 Whisper、ffmpeg 或另设转写缓存。单段音频上限 120 秒、下载上限 16 MiB；失败保留同条消息的文字补充，不推测音频内容。
-语音内容以带来源标记的文字进入原生 steer；确认保存仍需要文字确认。Telos 临时音频和图片处理后删除；图片进入 DSH 后的附件和会话保留仍遵循 Harness 原生行为。
+```dotenv
+DEEPSEEK_API_KEY=填写自己的模型密钥
+BAIDU_MAP_AUTH_TOKEN=填写自己的地图令牌
+```
 
-语音需要官方完整 Node 发行版 `@deepseek-ai/dsh@0.2.1-rc.2`。本次检查的 Python 所带单文件版缺少语音资源，`--telos-prepare-voice` 会报告资源缺失；不能据此认为语音已经可用。使用 Node.js 22.19+ 的官方安装方式 `npm install -g @deepseek-ai/dsh@0.2.1-rc.2`，然后以同一个 `DSH_HOME` 启动即可。无需启用 Web/TUI。
-安装包采用本机 ad-hoc 签名，尚未做 Developer ID 签名、公证和另一台实体 Mac 的授权验证。
+安装并运行：
+
+```sh
+dsh plugin --profile telos add telos-harness@file:/path/to/telos-harness-0.4.4-macos-arm64.tgz --offline
+dsh --profile telos --telos-setup
+dsh --profile telos --telos-login
+dsh --profile telos --telos-authorize
+dsh --profile telos --telos-status
+dsh --profile telos
+```
+
+`--telos-setup` 只创建 Telos 非敏感配置，不再要求输入 Key。`--telos-prepare-voice` 已移除，语音由宿主准备。CLI 与桌面使用相同插件包。CLI 默认不启用录音界面、多 Agent 工具或额外服务器；微信会话只开放 Telos 业务工具和原生 Skill/todo 工具。
+
+如需本地语音，在 DSH profile 的 `cordis.patch.yml` 启用官方模块（不属于 Telos 安装声明）：
+
+```yaml
+- insert:
+    - id: speech-to-text
+      name: '@deepseek-ai/dsh-experimental-speech-to-text'
+      config:
+        defaultProvider: sensevoice-local
+        language: zh
+    - id: speech-to-text-sensevoice
+      name: '@deepseek-ai/dsh-experimental-speech-to-text-sensevoice'
+      config:
+        dataRoot: !!js dshHomePath('speech-to-text', 'sensevoice')
+```
+
+模型仍须通过 DSH 的语音准备能力完成下载；上面的配置仅启用模块，不代表模型已就绪。也可以复用同一 DSH_HOME 下已准备好的原生模型。CLI 语音需要完整官方 Node 或桌面内置运行时，单文件精简运行时可能不包含所需资源。
+
+## Apple 授权
+
+点击桌面的「授权日历与提醒事项」或运行 CLI 的 `--telos-authorize`，macOS 会向独立组件「Telos Apple」请求日历与提醒事项访问权限。它仍是模型调用的 Apple 工具，只负责执行本机业务，不包含新的 Agent 或循环。两种 DSH 入口使用相同组件与授权方式，无需修改 DSH 的签名或权限声明。
+
+状态页分别显示两项权限。若此前选择了拒绝，请在「系统设置 → 隐私与安全性 → 日历 / 提醒事项」中允许 Telos Apple，再检查状态；拒绝后系统未必重复弹窗。错误信息会区分权限不足、系统返回错误和等待超时。
+
+授权、查询和确认后的写入统一由 LaunchServices 启动该应用；每次请求完成后退出，不安装常驻服务。请求内容通过仅当前用户可读写的临时文件传递，结束后清理，应用有最长运行时间。写入仍经过原有确认和账本；若执行结果未知，不自动重放。
+
+当前开发包使用 ad-hoc 签名。本机验证：重启和升级时保持同一个已签名 Apple 组件，可保留授权；组件内容与签名改变后，系统重新要求授权。更换本次测试组件与正式安装包也可能需要再次授权。这属于代码身份变化，不能只凭相同应用名称保证授权延续。正式分发应使用稳定的 Developer ID 签名并完成公证；目前没有完成该分发验证。不要重置系统权限数据库来绕过授权。
+
+## 微信人设
+
+插件内置「默认助手」和「黎曼」，首次安装和没有人设字段的旧配置默认使用「默认助手」。黎曼保留行动力教练、平等交流和克制关怀的风格，去除原作者的专属称呼，不附带私人记忆或聊天记录；用户可以在微信中说明希望使用的称呼。
+
+桌面版在 Telos 配置页选择「微信人设」。CLI 停止当前 Telos 实例后选择：
+
+```sh
+dsh --profile telos --telos-persona liman
+# 恢复默认助手：
+dsh --profile telos --telos-persona default
+# 或选择自己的 UTF-8 文本文件（不超过 64 KiB）：
+dsh --profile telos --telos-persona-file "/absolute/path/my-persona.md"
+```
+
+自定义文件也支持 `~/` 路径；文件保留在原处，插件只保存其路径。文件缺失、为空、编码不正确或超限时明确报错，不悄悄退回默认人设。不要编辑安装包中的文件来自定义，以免升级覆盖；使用自定义文件选项即可。
+
+选择保存后重新启动 Telos，即作用于新建和恢复的微信会话，不改变其他 DSH 会话。历史、待确认草稿和操作回执保留；切换人设不会删除旧聊天中的措辞和称呼，也不会自动批准操作。人设与业务规则合成当前微信会话的完整提示词，不继承宿主其他会话的人设。身份和表达风格可变，参数校验、确认、防重复写入仍由业务代码执行。
+
+所选人设会作为提示词发送给 DSH 当前使用的模型。自定义文件不要包含密钥或不希望发送的资料。升级保留 `config.json` 中的选择和自定义文件路径。
+
+## 数据、升级与确认
+
+数据默认位于 `$DSH_HOME/telos`，可用 `TELOS_HOME` 指定业务目录。历史、附件、凭据和语音模型由 DSH 保存；Telos 保存草稿、确认、Apple 操作账本及微信登录与收发回执。微信登录信息属于渠道业务状态。
+
+0.2.x 升级前停止该隔离实例，备份整个 DSH_HOME，在 DSH 配置同样的模型和默认选择。旧 Telos `config.json` 中的 `model`、`base_url` 会保留但不再使用，插件不会自动修改宿主设置或迁移密钥。CLI 从 sdk-minimal 切换到上述 base profile，保留同一个 DSH_HOME，即可复用原生凭据、历史和 Telos 数据。不要同时启动两个微信实例。
+
+升级只替换插件文件；不重新扫码、不覆盖已有业务数据。停止或卸载 Telos 不删除 DSH 的凭据、Skill 或模型。新版本拒绝不支持的配置版本。插件不安装 launchd 服务、不接管其他微信机器人。
+
+Apple 写入仍须用户文字确认、预览送达与版本校验，并保留防重复写入账本。图片交给 DSH 原生附件和模型视觉能力；语音经 Telos 下载、解密并转为 WAV 后调用 DSH 已配置的识别服务。识别失败不猜测音频内容，语音不能代替文字确认。Telos 临时媒体处理后删除，进入 DSH 的图片保留遵循其原生规则。
+
+安装包包含可选的通用黎曼人设，不含个人密钥、微信状态、个人资料或历史。当前为 ad-hoc 签名，尚未做 Developer ID 公证或另一台实体 Mac 验证。现有微信机器人不会自动切换。

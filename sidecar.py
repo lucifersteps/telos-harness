@@ -4,7 +4,6 @@ import argparse
 import asyncio
 import base64
 from dataclasses import asdict
-import getpass
 import hashlib
 import json
 import logging
@@ -18,6 +17,7 @@ import aiohttp
 
 from channel import Channel
 from settings import read_config,write_config
+from personas import OPTIONS,selection,persona_text
 from telos.adapters.base import ConversationRef
 from telos.adapters.wechat.adapter import WeChatAdapter
 from telos.adapters.wechat.config import WeChatConfig
@@ -28,6 +28,8 @@ from telos.adapters.wechat.media import create_wechat_media_resolver,item_type_v
 from telos.adapters.wechat.state import WeChatStateStore
 from telos.core.process_lock import SingleInstanceLock
 from telos.tools.apple.service import AppleService,PersonalAppleClient
+from apple_component import apple_client
+from urllib.parse import urlparse
 
 
 def helper_path(config):
@@ -86,7 +88,7 @@ class WeChatChannel(Channel):
             async with client.post(self.ready.result()+'/transcribe',headers={'Authorization':'Bearer '+self.token},
                 json={'audio':base64.b64encode(wav).decode()}) as response:
                 if response.status!=200:
-                    raise VoiceInputError('本地语音识别未完成，请检查 --telos-status，或重新发送文字。')
+                    raise VoiceInputError('DSH 语音识别未完成，请检查 --telos-status，或重新发送文字。')
                 return (await response.json())['text']
 
     async def poll(self):
@@ -122,7 +124,7 @@ async def serve(root,harness_home,config):
     if config['wechat'].get('enabled') and (not wc.account_id or not wc.allowed_users):
         raise ValueError('请先运行 --telos-login 完成微信扫码；没有启动轮询。')
     adapter=WeChatAdapter(config=wc,state_store=store)
-    apple=AppleService(PersonalAppleClient(helper_path(config)),root/'apple')
+    apple=AppleService(apple_client(config,helper_path(config)),root/'apple')
     channel=WeChatChannel(root,apple,adapter,harness_home=harness_home,token=token)
     stopped=asyncio.Event();loop=asyncio.get_running_loop()
     for sig in (signal.SIGINT,signal.SIGTERM):loop.add_signal_handler(sig,stopped.set)
@@ -154,19 +156,26 @@ async def command(args):
         if time.monotonic()>=deadline:raise ValueError('该 Telos 数据目录已有运行实例；请先停止它，不会抢占或终止进程。')
         await asyncio.sleep(.1)
     try:
-        if args.command=='setup':
-            secrets={}
-            for name,label in [('DEEPSEEK_API_KEY','DeepSeek API Key'),('BAIDU_MAP_AUTH_TOKEN','百度地图 Token（可留空）')]:
-                value=os.environ.get(name)
-                if value is None:value=getpass.getpass(label+': ',stream=sys.stderr)
-                if value:secrets[name]=value
-            config['model']=os.environ.get('TELOS_MODEL',config['model'])
-            config['base_url']=os.environ.get('DEEPSEEK_BASE_URL',config['base_url'])
+        if args.command=='configure':
+            value=json.load(sys.stdin)
+            from settings import runtime_options
+            if not isinstance(value,dict) or set(value)-{'max_steps','persona','persona_file','tools','model_selection'}:raise ValueError('只接受 Telos 非敏感选项；凭据请交给 DSH。')
+            steps=value.get('max_steps',config.get('max_steps',24))
+            if isinstance(steps,bool) or not isinstance(steps,int) or not 1<=steps<=100:raise ValueError('执行步骤应为 1 到 100 的整数。')
+            candidate={**config,**value,'max_steps':steps}
+            candidate.update(runtime_options(candidate))
+            selected=selection(candidate);persona_text(candidate)
+            config.update(candidate);config.update(selected)
+            if selected['persona']!='custom':config.pop('persona_file',None)
+            write_config(root,config);print(json.dumps({'configured':True}),flush=True)
+        elif args.command=='setup':
             write_config(root,config)
-            print(json.dumps({'credentials':secrets}),flush=True) # private pipe consumed by Harness; never terminal output
-        elif args.command=='login':
+            print(json.dumps({'configured':True}),flush=True)
+        elif args.command in {'login','login-json'}:
             store=WeChatStateStore(root/'wechat')
             def challenge(value):
+                if args.command=='login-json':
+                    print(json.dumps({'event':'qr','image_url':value.image_url}),flush=True);return
                 import segno
                 print('请用微信扫描二维码：',file=sys.stderr)
                 segno.make(value.scan_data).terminal(out=sys.stderr,compact=True)
@@ -176,12 +185,16 @@ async def command(args):
             config['wechat']['enabled']=True;write_config(root,config)
             print(json.dumps({'wechat_login':True}))
         elif args.command=='authorize':
-            result=await asyncio.to_thread(PersonalAppleClient(helper_path(config)).request,'authorize',{})
+            from settings import runtime_options
+            if not runtime_options(config)['tools']['apple']:raise ValueError('请先开启 Apple 工具。')
+            client=apple_client(config,helper_path(config));client.timeout=260
+            result=await asyncio.to_thread(client.request,'authorize',{})
             print(json.dumps({'apple':result}))
         elif args.command=='status':
-            try:apple=PersonalAppleClient(helper_path(config)).request('status',{})
-            except Exception:apple={'status':'unavailable'}
-            print(json.dumps({'configuration':(root/'config.json').exists(),'wechat_enabled':config['wechat'].get('enabled',False),
+            from settings import runtime_options
+            try:apple=apple_client(config,helper_path(config)).request('status',{}) if runtime_options(config)['tools']['apple'] else {'status':'disabled'}
+            except Exception as error:apple={'status':'unavailable','error':str(error)}
+            print(json.dumps({'configuration':(root/'config.json').exists(),'personas':OPTIONS,**selection(config),'wechat_enabled':config['wechat'].get('enabled',False),
                 'wechat_login':bool(WeChatStateStore(root/'wechat').load_default_account()),'apple':apple}))
         else:await serve(root,Path(args.harness_home),config)
     finally:lock.release()
@@ -191,7 +204,7 @@ def main():
     os.umask(0o077)
     if len(sys.argv)==4 and sys.argv[1]=='decode-silk':
         decode_silk(sys.argv[2],sys.argv[3]);return 0
-    parser=argparse.ArgumentParser();parser.add_argument('command',choices=['setup','login','authorize','status','serve'])
+    parser=argparse.ArgumentParser();parser.add_argument('command',choices=['setup','configure','login','login-json','authorize','status','serve'])
     parser.add_argument('--home',required=True);parser.add_argument('--harness-home')
     args=parser.parse_args()
     try:asyncio.run(command(args))

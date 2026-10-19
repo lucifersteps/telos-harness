@@ -78,9 +78,13 @@ async def test_installed_real_sensevoice_silk_preview_voice_not_confirmation_res
     import pilk
     h=Installed(tmp_path,[call('voice-preview',draft()),'请确认。',call('renewed',draft()),'请使用文字确认。',call('after-silence',draft()),'语音为空，请使用文字确认。','已保存。','没有待确认操作。'])
     try:
-        patch=tmp_path/'speech.yml';patch.write_text('- id: speech-to-text-sensevoice\n  config:\n    dataRoot: '+json.dumps(os.environ['TELOS_TEST_SPEECH_ROOT'])+'\n')
+        # The host, not the Telos bundle, enables its native speech provider.
+        patch=tmp_path/'speech.yml';patch.write_text(json.dumps([{'insert':[
+            {'id':'host-speech','name':'@deepseek-ai/dsh-experimental-speech-to-text','config':{'defaultProvider':'sensevoice-local','language':'zh'}},
+            {'id':'host-sensevoice','name':'@deepseek-ai/dsh-experimental-speech-to-text-sensevoice','config':{'dataRoot':os.environ['TELOS_TEST_SPEECH_ROOT']}},
+        ]}]))
         h.launch_extra=['--patch',str(patch)]
-        prepared=h.run('--telos-prepare-voice');assert '已就绪' in prepared.stdout
+        assert 'sensevoice-local' in h.run('--telos-status').stdout
         # Speech is generated from a synthetic request; microphone/personal recordings are never used.
         def spoken(phrase,name):
             wav=tmp_path/(name+'.wav');pcm=tmp_path/(name+'.pcm');silk=tmp_path/(name+'.silk')
@@ -101,12 +105,12 @@ async def test_installed_real_sensevoice_silk_preview_voice_not_confirmation_res
         silence=asset(h,b'\0\0'*16000,3,'silence',encode_type=1,sample_rate=16000)
         push_media(h,'silence',[silence]);await h.wait(lambda:len(h.services.sent)>2,timeout=80)
         assert '语音内容未知' in json.dumps(h.model.requests[-1],ensure_ascii=False) and not h.services.apple.writes
-        h.stop();assert '已就绪' in h.run('--telos-prepare-voice').stdout
+        h.stop();assert 'sensevoice-local' in h.run('--telos-status').stdout
         h.start();h.services.push('written-approval','1');await h.wait(lambda:len(h.services.sent)>3)
         h.services.push('written-approval-duplicate','1');await h.wait(lambda:len(h.services.sent)>4)
         assert len(h.services.apple.writes)==1 and not list((h.data/'media').iterdir())
         # No Whisper, recording UI or web server was enabled in this profile.
-        config=(h.home/'profiles/sdk-minimal/cordis.yml').read_text()
+        config=(h.home/'profiles/telos/cordis.yml').read_text()
         assert 'voice-input' not in config and 'webui' not in config
     finally:await h.close()
 

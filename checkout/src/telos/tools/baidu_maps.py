@@ -152,7 +152,7 @@ class BaiduMaps:
     def __init__(self, *, opener=None):
         self.opener = opener or build_opener(_NoRedirect())
 
-    def resolve(self, args, *, state=None, records=()):
+    def resolve(self, args, *, state=None, records=(), token=None):
         operation = args.get('operation')
         parameters = validate_query(operation, args.get('parameters', {}))
         provided = [parameters[key] for key in ('location', 'center') if key in parameters]
@@ -166,13 +166,13 @@ class BaiduMaps:
                 provided.append(coordinate)
         if any(_coordinate(value) not in trusted for value in provided):
             raise ValueError('坐标没有用户输入或已保存工具结果作为依据。先调用 place/geocoding 取得可信坐标；不得使用记忆、估计或取整坐标。保留原始起终点和时间要求。')
-        return ToolExecution(execute=lambda: self.query(operation, parameters))
+        return ToolExecution(execute=lambda: self.query(operation, parameters, token=token))
 
-    async def query(self, operation, parameters):
+    async def query(self, operation, parameters, *, token=None):
         parameters = validate_query(operation, parameters)
-        token = os.environ.get('BAIDU_MAP_AUTH_TOKEN', '').strip()
+        token = (os.environ.get('BAIDU_MAP_AUTH_TOKEN', '') if token is None else token).strip()
         if not token:
-            return {'status': 'unavailable', 'message': '尚未配置百度 Agent Plan Token；请在本机 .personal/.env 设置 BAIDU_MAP_AUTH_TOKEN。'}
+            return {'status': 'unavailable', 'message': '尚未配置百度 Agent Plan Token；请在 DSH 凭据或启动环境中配置 BAIDU_MAP_AUTH_TOKEN。'}
         return await asyncio.to_thread(self._query, operation, parameters, token)
 
     def _query(self, operation, parameters, token):

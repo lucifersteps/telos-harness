@@ -1,54 +1,13 @@
-- id: deepseek-llm-api-extensions
+# Test-owned host settings, never included in the distributed plugin.
+- id: session-title-llm
   disabled: true
-- id: session-log-deepseek
-  disabled: true
-- id: plugin-package-inventory-deepseek
-  disabled: true
-- id: tool-fs
-  disabled: true
-- id: tool-working-directory
-  disabled: true
-- id: persistent-bash
-  disabled: true
-- id: persistent-pwsh
-  disabled: true
-- id: agent-loop
+- id: agent-default-model
   config:
-    agents: []
-    maxParallelToolCalls: 1
-- id: system-prompt
-  config:
-    includeHarnessIdentity: false
-    includeRuntimeContext: true
-# Official persistence barrier: flush before model/tool dispatch and between steps.
-- insert:
-    - id: session-checkpoints
-      name: '@deepseek-ai/dsh-session-checkpoint-policy'
-# Run the channel plugin directly; no SDK transport or coding terminals.
-- id: sdk-jsonrpc-server
-  disabled: true
-- id: sdk-app-startup
-  disabled: true
-- id: terminal-bash
-  disabled: true
-- id: terminal-pwsh
-  disabled: true
-- id: pty
-  disabled: true
-- id: subprocess
-  disabled: false
-- id: mcp-resources
-  disabled: true
-- id: session-title
-  disabled: true
-- id: system-prompt
-  config:
-    personaPrefix: '你是用户的个人助理。'
+    provider: deepseek-official
+    model: !!js process.env.TELOS_MODEL
+    reasoningEffort: off
 - id: llm-deepseek
   config:
     baseURL: !!js process.env.DEEPSEEK_BASE_URL
     thinking: disabled
     streamIdleTimeoutMs: 180000
-- id: skill-filesystem
-  config:
-    customSkillDirs: !!js '[process.env.TELOS_SKILLS_DIR]'

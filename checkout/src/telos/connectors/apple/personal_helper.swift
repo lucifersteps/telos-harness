@@ -7,6 +7,16 @@ import MapKit
 
 // 签名的无界面连接器持有 Apple 权限；私有功能通过隔离的原生适配器提供。
 let store = EKEventStore()
+// LaunchServices starts the app independently of DSH. Bound its lifetime even
+// if the caller exits; a missing write receipt remains unknown in AppleService.
+let deadlineTimer = DispatchSource.makeTimerSource(queue: .global())
+if let index = CommandLine.arguments.firstIndex(of: "--telos-timeout"),
+   CommandLine.arguments.indices.contains(index + 1),
+   let seconds = Double(CommandLine.arguments[index + 1]), seconds > 0, seconds <= 300 {
+    deadlineTimer.schedule(deadline: .now() + seconds)
+    deadlineTimer.setEventHandler { _exit(124) }
+    deadlineTimer.resume()
+}
 let formatter: ISO8601DateFormatter = {
     let value = ISO8601DateFormatter()
     value.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -40,24 +50,52 @@ func permitted(_ entity: EKEntityType) -> Bool {
     return status == .fullAccess
 }
 
+func permissionName(_ entity: EKEntityType) -> String {
+    switch EKEventStore.authorizationStatus(for: entity) {
+    case .notDetermined: return "not_determined"
+    case .restricted: return "restricted"
+    case .denied: return "denied"
+    case .fullAccess: return "full_access"
+    case .writeOnly: return "write_only"
+    @unknown default: return "unknown"
+    }
+}
+
+func permissionStatus() -> [String: Any] {
+    ["events": permitted(.event), "reminders": permitted(.reminder),
+     "event_status": permissionName(.event), "reminder_status": permissionName(.reminder),
+     "application": Bundle.main.bundleIdentifier ?? "", "pid": ProcessInfo.processInfo.processIdentifier]
+}
+
 func requireAccess() throws {
     if !permitted(.event) || !permitted(.reminder) {
-        throw Failure(code: "permission_denied", message: "请先执行 authorize 并允许访问日历和提醒事项。")
+        throw Failure(code: "permission_denied", message: "请先为 Telos Apple 授权日历和提醒事项；已拒绝时，请在系统设置 → 隐私与安全性中修改。")
     }
 }
 
 func authorize() throws {
+    var failures: [String] = []
+    var timedOut = false
     for entity in [EKEntityType.event, .reminder] {
         if permitted(entity) { continue }
+        let name = entity == .event ? "日历" : "提醒事项"
+        if [.denied, .restricted].contains(EKEventStore.authorizationStatus(for: entity)) {
+            failures.append("\(name)权限已拒绝或受系统限制，请在系统设置 → 隐私与安全性 → \(name)中检查 Telos Apple。")
+            continue
+        }
         let semaphore = DispatchSemaphore(value: 0)
         var granted = false
-        let callback: (Bool, Error?) -> Void = { ok, _ in granted = ok; semaphore.signal() }
+        var reason = ""
+        let callback: (Bool, Error?) -> Void = { ok, error in granted = ok; reason = error?.localizedDescription ?? ""; semaphore.signal() }
         if entity == .event { store.requestFullAccessToEvents(completion: callback) }
         else { store.requestFullAccessToReminders(completion: callback) }
-        if semaphore.wait(timeout: .now() + 120) == .timedOut || !granted {
-            throw Failure(code: "permission_denied", message: "未获得 Apple 数据访问权限。")
+        if semaphore.wait(timeout: .now() + 120) == .timedOut {
+            timedOut = true; failures.append("等待\(name)授权超时，请再次点击授权并处理 macOS 弹窗。")
+        } else if !granted {
+            failures.append("未获得\(name)访问权限。\(reason) 请在系统设置 → 隐私与安全性 → \(name)中检查 Telos Apple。")
         }
     }
+    if !failures.isEmpty { throw Failure(code: timedOut ? "authorization_timeout" : "permission_denied", message: failures.joined(separator: "\n")) }
 }
 
 func calendarPayload(_ calendar: EKCalendar, kind: String) -> [String: Any] {
@@ -1133,12 +1171,12 @@ do {
     let request = try JSONSerialization.jsonObject(with: input) as? [String: Any] ?? [:]
     let action = text(request["action"])
     if action == "status" {
-        emit(["ok": true, "data": ["events": permitted(.event), "reminders": permitted(.reminder)]])
+        emit(["ok": true, "data": permissionStatus()])
     } else if action == "search_locations" {
         emit(["ok": true, "data": try searchLocations(request)])
     } else if action == "authorize" {
         try authorize()
-        emit(["ok": true, "data": ["events": permitted(.event), "reminders": permitted(.reminder)]])
+        emit(["ok": true, "data": permissionStatus()])
     } else {
         try requireAccess()
         if action == "watch" {

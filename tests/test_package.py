@@ -20,7 +20,7 @@ from support import Apple,Model,call,draft
 from runtime import ROOT,launch_args
 from settings import read_config,write_config
 
-ARCHIVE=ROOT/'dist/telos-harness-0.2.0-macos-arm64.tgz'
+ARCHIVE=ROOT/'dist/telos-harness-0.4.4-macos-arm64.tgz'
 pytestmark=pytest.mark.skipif(not ARCHIVE.exists(),reason='先构建插件归档')
 
 def run_async(fn):
@@ -44,6 +44,7 @@ class Services:
                     key=parse_qs(urlparse(self.path).query)['encrypted_query_param'][0];owner.downloads.append(key)
                     value=owner.assets.get(key,b'invalid');self.send_response(200);self.end_headers();self.wfile.write(value);return
                 if 'get_bot_qrcode' in self.path:self.result({'qrcode':'isolated-qr','qrcode_img_content':'https://example.invalid/test'})
+                elif getattr(owner,'login_wait',False):self.result({'status':'wait'})
                 else:
                     owner.logins+=1;self.result({'status':'confirmed','ilink_bot_id':'isolated-bot','bot_token':'isolated-token','ilink_user_id':'test','baseurl':owner.url})
             def do_POST(self):
@@ -54,8 +55,11 @@ class Services:
                         owner.authorizations+=action=='authorize';self.result({'events':'authorized','reminders':'authorized'})
                     else:self.result(owner.apple.request(action,data['args']))
                 elif self.path.endswith('getupdates'):
-                    owner.polls+=1;time.sleep(.05);messages=owner.messages[:];owner.messages.clear()
-                    self.result({'ret':0,'msgs':messages,'get_updates_buf':str(owner.polls)})
+                    owner.polls+=1;time.sleep(.05)
+                    # Replay until the client supplies the returned cursor. A disconnected
+                    # long poll must not consume messages intended for the restarted client.
+                    cursor=int(data.get('get_updates_buf') or 0);messages=owner.messages[cursor:]
+                    self.result({'ret':0,'msgs':messages,'get_updates_buf':str(cursor+len(messages))})
                 elif self.path.endswith('sendmessage'):
                     owner.sent.append(data);self.result({'ret':0,'message_id':str(len(owner.sent))})
                 else:self.result({'ret':0})
@@ -73,29 +77,39 @@ class Installed:
         self.data=self.home/'telos';self.model=Model(script) if connection is None else None;self.services=Services();self.proc=None;self.logs=[]
         connection=connection or {'api_key':'package-secret-test','base_url':self.model.url,'model':'deepseek-flash'}
         self.env={k:v for k,v in os.environ.items() if not k.startswith(('TELOS_','DEEPSEEK_','BAIDU_','DSH_','PYTHON'))}
-        self.env.update(DSH_HOME=str(self.home))
+        self.env.update(DSH_AGENTS_HOME=str(self.home/'agents'),DSH_HOME=str(self.home))
         self.command=launch_args();self.launch_extra=[]
+        profile=self.home/'profiles/telos';profile.mkdir(parents=True)
+        (profile/'package.json').write_text(json.dumps({'name':'dsh-profile-telos','private':True,'dsh':{'profile':{'bundles':['@deepseek-ai/dsh-base']}}}))
+        for name in ['cordis.yml','cordis.patch.yml']:(profile/name).write_text('[]\n')
+        # Host configuration is test-owned. Telos never configures model credentials.
+        self.env.update(DEEPSEEK_API_KEY=connection['api_key'],BAIDU_MAP_AUTH_TOKEN='map-secret-test')
         # A copied archive can be removed after installation; no source/symlink dependency.
         self.archive=path/'installer.tgz';shutil.copy2(ARCHIVE,self.archive)
         self.install(self.archive)
         self.archive.unlink()
-        self.run('--telos-setup',extra={'DEEPSEEK_API_KEY':connection['api_key'],'BAIDU_MAP_AUTH_TOKEN':'map-secret-test','DEEPSEEK_BASE_URL':connection['base_url'],'TELOS_MODEL':connection['model']})
+        (profile/'cordis.patch.yml').write_text(json.dumps([
+            {'id':'llm-deepseek','config':{'baseURL':connection['base_url'],'thinking':'disabled'}},
+            {'id':'agent-default-model','config':{'provider':'deepseek-official','model':connection['model'],'reasoningEffort':'off'}},
+            {'id':'session-title-llm','disabled':True},
+        ]))
+        self.run('--telos-setup')
         helper=path/'fake apple'
         helper.write_text(f'#!{sys.executable}\nimport json,sys,urllib.request\nb=json.dumps({{"action":sys.argv[1],"args":json.load(sys.stdin)}}).encode()\nr=urllib.request.urlopen(urllib.request.Request({self.services.url+"/apple"!r},data=b,headers={{"Content-Type":"application/json"}}))\nprint(r.read().decode())\n')
         helper.chmod(0o700)
         config=read_config(self.data);config['apple_helper']=str(helper);config['wechat']['base_url']=self.services.url;config['wechat']['cdn_base_url']=self.services.url;write_config(self.data,config)
     def install(self,archive):
-        result=subprocess.run([*self.command,'plugin','--profile','sdk-minimal','add','telos-harness@file:'+str(archive),'--offline'],env=self.env,cwd=self.path,capture_output=True,text=True,timeout=90)
+        result=subprocess.run([*self.command,'plugin','--profile','telos','add','telos-harness@file:'+str(archive),'--offline'],env=self.env,cwd=self.path,capture_output=True,text=True,timeout=90)
         assert result.returncode==0,result.stdout+result.stderr
     def run(self,arg,extra=None,ok=True):
-        result=subprocess.run([*self.command,'--profile','sdk-minimal',*self.launch_extra,*([arg] if arg else [])],env={**self.env,**(extra or {})},cwd=self.path,
+        result=subprocess.run([*self.command,'--profile','telos',*self.launch_extra,*(arg if isinstance(arg,list) else [arg] if arg else [])],env={**self.env,**(extra or {})},cwd=self.path,
                               stdin=subprocess.DEVNULL,capture_output=True,text=True,timeout=35)
         self.logs.append(result.stdout+result.stderr)
         if ok:assert result.returncode==0,result.stdout+result.stderr
         return result
     def start(self):
         self.log=(self.path/f'run-{time.time_ns()}.log').open('w+');self.logs.append(self.log.name)
-        self.proc=subprocess.Popen([*self.command,'--profile','sdk-minimal',*self.launch_extra],env=self.env,cwd=self.path,
+        self.proc=subprocess.Popen([*self.command,'--profile','telos',*self.launch_extra],env=self.env,cwd=self.path,
             stdin=subprocess.DEVNULL,stdout=self.log,stderr=self.log)
     async def wait(self,predicate,timeout=20):
         deadline=time.monotonic()+timeout
@@ -123,12 +137,11 @@ async def test_installed_first_setup_restart_upgrade_and_no_duplicate(tmp_path):
         h.run('--telos-login');h.run('--telos-authorize')
         assert h.services.logins==1 and h.services.authorizations==1
         status=h.run('--telos-status').stdout
-        assert '"model":true' in status and '"maps":true' in status
+        assert '"model":"deepseek-flash"' in status and '"credentials"' not in status
         assert 'package-secret-test' not in ''.join(h.logs)
         assert (h.data/'config.json').stat().st_mode&0o777==0o600
-        credentials=h.home/'.credentials.yaml';assert credentials.exists()
-        assert credentials.stat().st_mode&0o777==0o600
-        original_config=(h.data/'config.json').read_bytes();original_credentials=credentials.read_bytes()
+        credentials=h.home/'.credentials.yaml';assert not credentials.exists()
+        original_config=(h.data/'config.json').read_bytes()
         h.start();await h.wait(lambda:h.services.polls>0)
         h.services.push('unauthorized','恶意请求',user='other');h.services.push('request','添加测试会议')
         await h.wait(lambda:len(h.services.sent)>=1)
@@ -137,7 +150,7 @@ async def test_installed_first_setup_restart_upgrade_and_no_duplicate(tmp_path):
         assert '<skill_content name=' in json.dumps(h.model.requests[1],ensure_ascii=False)
         h.stop()
         # The business preview and official history survive a real process restart.
-        assert list((h.home/'sessions').glob('*/*/session.v*.jsonl'))
+        assert list((h.home/'sessions').glob('*/*/session.v*.jsonl*'))
         h.start();before=len(h.services.sent);h.services.push('confirm','1')
         await h.wait(lambda:len(h.services.sent)>before)
         assert len(h.services.apple.writes)==1
@@ -145,13 +158,13 @@ async def test_installed_first_setup_restart_upgrade_and_no_duplicate(tmp_path):
         # Same package content at the next version exercises the native package upgrade boundary.
         upgrade=tmp_path/'upgrade';upgrade.mkdir()
         with tarfile.open(ARCHIVE) as tar:tar.extractall(upgrade,filter='data')
-        meta=upgrade/'package/package.json';value=json.loads(meta.read_text());value['version']='0.2.1';meta.write_text(json.dumps(value))
+        meta=upgrade/'package/package.json';value=json.loads(meta.read_text());value['version']='0.4.3';meta.write_text(json.dumps(value))
         manifest_path=upgrade/'package/component-manifest.json';manifest=json.loads(manifest_path.read_text())
-        manifest['version']='0.2.1';manifest['files']['package.json']=hashlib.sha256(meta.read_bytes()).hexdigest();manifest_path.write_text(json.dumps(manifest))
+        manifest['version']='0.4.3';manifest['files']['package.json']=hashlib.sha256(meta.read_bytes()).hexdigest();manifest_path.write_text(json.dumps(manifest))
         tgz=tmp_path/'upgrade.tgz'
         with tarfile.open(tgz,'w:gz') as tar:tar.add(upgrade/'package',arcname='package')
         h.install(tgz);shutil.rmtree(upgrade);tgz.unlink()
-        assert (h.data/'config.json').read_bytes()==original_config and credentials.read_bytes()==original_credentials
+        assert (h.data/'config.json').read_bytes()==original_config and not credentials.exists()
         h.start();before=len(h.services.sent)
         h.services.push('confirm','1');h.services.push('confirm-again','1')
         await h.wait(lambda:len(h.services.sent)>before)
@@ -233,7 +246,10 @@ async def test_installed_steer_while_model_running(tmp_path):
 def test_package_manifest_and_self_contained_components():
     with tarfile.open(ARCHIVE) as tar:
         manifest=json.load(tar.extractfile('package/component-manifest.json'))
+        assert tar.extractfile('package/cordis.patch.yml').read().decode()=='- insert:\n    - id: telos-bootstrap\n      name: telos-harness\n'
         assert 'bin/telos-component' in manifest['files']
+        persona=tar.extractfile('package/personas/liman.md').read().decode()
+        assert '你叫黎曼' in persona and '渊栎' not in persona
         assert 'native/Telos Harness Apple.app/Contents/MacOS/telos-apple' in manifest['files']
         for name,digest in manifest['files'].items():
             assert hashlib.sha256(tar.extractfile('package/'+name).read()).hexdigest()==digest
@@ -244,3 +260,50 @@ def test_package_manifest_and_self_contained_components():
                 assert '/Users/liangyuanli/' not in text
         sidecar=tar.extractfile('package/bin/telos-component').read()
         assert sidecar[:4] in [b'\xcf\xfa\xed\xfe',b'\xfe\xed\xfa\xcf']
+
+
+@run_async
+async def test_host_model_ignores_legacy_telos_override_and_setup_preserves_host(tmp_path):
+    h=Installed(tmp_path,['收到。'])
+    try:
+        config=read_config(h.data);config.update(model='obsolete-model',base_url='https://invalid.example',max_steps=24)
+        write_config(h.data,config)
+        profile=h.home/'profiles/telos/cordis.patch.yml';before=profile.read_bytes()
+        credentials=h.home/'.credentials.yaml'
+        credentials.write_text(json.dumps({'version':1,'refs':{'UNRELATED_KEY':'preserve-me'}}));credentials.chmod(0o600)
+        saved=credentials.read_bytes()
+        h.run('--telos-setup',extra={'DEEPSEEK_API_KEY':'must-not-store','BAIDU_MAP_AUTH_TOKEN':'must-not-store'})
+        assert credentials.read_bytes()==saved and profile.read_bytes()==before
+        assert read_config(h.data)==config
+        h.run('--telos-login');h.start();h.services.push('plain','你好')
+        await h.wait(lambda:len(h.services.sent)>0)
+        assert h.model.requests[0]['model']=='deepseek-flash'
+        assert credentials.read_bytes()==saved and profile.read_bytes()==before
+    finally:await h.close()
+
+
+@run_async
+async def test_missing_host_services_fail_clearly_without_installing_fallback(tmp_path):
+    h=Installed(tmp_path,[])
+    try:
+        profile=h.home/'profiles/telos/cordis.patch.yml'
+        entries=json.loads(profile.read_text());entries.append({'id':'credentials','disabled':True});profile.write_text(json.dumps(entries))
+        before=profile.read_bytes()
+        result=h.run(None,ok=False)
+        assert result.returncode!=0 and 'credentials' in result.stderr and '不补装' in result.stderr
+        assert profile.read_bytes()==before and not h.services.polls
+    finally:await h.close()
+
+
+@run_async
+async def test_existing_host_skill_is_loaded_by_native_dsh(tmp_path):
+    h=Installed(tmp_path,[call('host-skill',{'name':'host-note'},'skill'),call('read',{'action':'query','kind':'reminder'}),'提醒事项有买菜。'])
+    try:
+        folder=h.home/'skills/host-note';folder.mkdir(parents=True)
+        content='---\nname: host-note\ndescription: 用于虚构回归的宿主技能。\n---\nHOST_SKILL_REGRESSION_MARKER：查询结果必须向用户报告。\n'
+        (folder/'SKILL.md').write_text(content)
+        h.run('--telos-login');h.start();h.services.push('host-skill','使用宿主技能查询提醒事项')
+        await h.wait(lambda:len(h.services.sent)>0)
+        assert 'HOST_SKILL_REGRESSION_MARKER' in json.dumps(h.model.requests[1],ensure_ascii=False)
+        assert not h.services.apple.writes and (folder/'SKILL.md').read_text()==content
+    finally:await h.close()

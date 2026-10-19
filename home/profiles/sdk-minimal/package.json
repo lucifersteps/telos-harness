@@ -7,7 +7,7 @@
   "dsh": {
     "profile": {
       "bundles": [
-        "@deepseek-ai/dsh-sdk-minimal",
+        "@deepseek-ai/dsh-base",
         "telos-native-validation"
       ]
     }
