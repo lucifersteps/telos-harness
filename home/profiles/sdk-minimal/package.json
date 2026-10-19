@@ -1,0 +1,15 @@
+{
+  "name": "dsh-profile-sdk-minimal",
+  "private": true,
+  "dependencies": {
+    "telos-native-validation": "file:../../../plugin"
+  },
+  "dsh": {
+    "profile": {
+      "bundles": [
+        "@deepseek-ai/dsh-sdk-minimal",
+        "telos-native-validation"
+      ]
+    }
+  }
+}

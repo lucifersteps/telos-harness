@@ -1,0 +1,17 @@
+{
+  "name": "telos-native-validation",
+  "version": "0.0.1",
+  "type": "module",
+  "main": "index.mjs",
+  "dsh": {
+    "bundle": {
+      "patch": "cordis.patch.yml"
+    }
+  },
+  "exports": {
+    ".": "./index.mjs",
+    "./apple": "./apple.mjs",
+    "./maps": "./maps.mjs",
+    "./bootstrap": "./bootstrap.mjs"
+  }
+}

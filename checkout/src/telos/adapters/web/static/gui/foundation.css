@@ -1,0 +1,478 @@
+@import url("./tokens.css");
+
+/* 这些类只负责视觉和布局，不包含任何业务状态。 */
+.gui-root,
+.gui-root * {
+  box-sizing: border-box;
+}
+
+.gui-root {
+  min-height: 100%;
+  margin: 0;
+  background: var(--gui-color-canvas);
+  color: var(--gui-color-text);
+  font: var(--gui-font-size-md)/var(--gui-line-height-normal) var(--gui-font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+.gui-root button,
+.gui-root input,
+.gui-root select,
+.gui-root textarea {
+  font: inherit;
+}
+
+.gui-root :focus-visible {
+  outline: 2px solid var(--gui-color-focus);
+  outline-offset: 2px;
+}
+
+.gui-button,
+.gui-icon-button {
+  appearance: none;
+  min-height: var(--gui-control-height-md);
+  border: 1px solid var(--gui-color-border);
+  border-radius: var(--gui-radius-md);
+  background: var(--gui-color-surface);
+  color: var(--gui-color-text);
+  cursor: pointer;
+  transition:
+    border-color var(--gui-duration-fast) var(--gui-easing-standard),
+    background-color var(--gui-duration-fast) var(--gui-easing-standard),
+    color var(--gui-duration-fast) var(--gui-easing-standard),
+    transform var(--gui-duration-fast) var(--gui-easing-standard);
+}
+
+.gui-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--gui-space-2);
+  padding: 0 var(--gui-space-4);
+  font-size: var(--gui-font-size-sm);
+  font-weight: var(--gui-font-weight-medium);
+}
+
+.gui-icon-button {
+  width: var(--gui-control-height-md);
+  padding: 0;
+  display: inline-grid;
+  place-items: center;
+}
+
+.gui-button:hover:not(:disabled),
+.gui-icon-button:hover:not(:disabled) {
+  border-color: var(--gui-color-accent);
+  color: var(--gui-color-text);
+  background: var(--gui-color-surface-subtle);
+}
+
+.gui-button:active:not(:disabled),
+.gui-icon-button:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.gui-button[disabled],
+.gui-icon-button[disabled] {
+  cursor: default;
+  opacity: 0.46;
+  transform: none;
+}
+
+.gui-button[data-tone="primary"],
+.gui-icon-button[data-tone="primary"] {
+  border-color: var(--gui-color-accent);
+  background: var(--gui-color-accent);
+  color: var(--gui-color-on-accent);
+}
+
+.gui-button[data-tone="primary"]:hover:not(:disabled),
+.gui-icon-button[data-tone="primary"]:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--gui-color-accent) 90%, var(--gui-color-text));
+  color: var(--gui-color-on-accent);
+}
+
+.gui-button[data-tone="danger"] {
+  border-color: color-mix(in srgb, var(--gui-color-danger) 34%, var(--gui-color-border));
+  color: var(--gui-color-danger);
+}
+
+.gui-icon-button svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: var(--gui-icon-stroke);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* 尺寸变体：默认 md(36)。sm=30 / xs=28，svg 随之缩小。 */
+.gui-icon-button[data-size="sm"] {
+  width: var(--gui-control-height-sm);
+  min-height: var(--gui-control-height-sm);
+}
+.gui-icon-button[data-size="sm"] svg { width: 16px; height: 16px; }
+.gui-icon-button[data-size="xs"] {
+  width: 28px;
+  min-height: 28px;
+}
+.gui-icon-button[data-size="xs"] svg { width: 15px; height: 15px; }
+
+/* ghost 变体：无边框/透明底，仅 hover 显浅底。用于工具栏/安静图标按钮。 */
+.gui-icon-button[data-variant="ghost"] {
+  border-color: transparent;
+  background: transparent;
+  color: var(--gui-color-text-secondary);
+}
+.gui-icon-button[data-variant="ghost"]:hover:not(:disabled) {
+  border-color: transparent;
+  background: var(--gui-color-surface-subtle);
+  color: var(--gui-color-text);
+}
+
+/* icon-button 的 danger 语气（.gui-button 已有其定义）。 */
+.gui-icon-button[data-tone="danger"] {
+  color: var(--gui-color-danger);
+}
+
+/* 切换态（aria-pressed）：用强调软底表示激活。 */
+.gui-icon-button[aria-pressed="true"]:not([data-tone="primary"]) {
+  border-color: transparent;
+  background: var(--gui-color-accent-soft);
+  color: var(--gui-color-accent);
+}
+
+.gui-field {
+  display: grid;
+  gap: var(--gui-space-2);
+}
+
+.gui-field-label {
+  color: var(--gui-color-text);
+  font-size: var(--gui-font-size-sm);
+  font-weight: var(--gui-font-weight-semibold);
+}
+
+.gui-field-help {
+  color: var(--gui-color-text-muted);
+  font-size: var(--gui-font-size-xs);
+}
+
+.gui-input,
+.gui-select,
+.gui-textarea {
+  width: 100%;
+  border: 1px solid var(--gui-color-border);
+  border-radius: var(--gui-radius-md);
+  background: var(--gui-color-surface);
+  color: var(--gui-color-text);
+  transition:
+    border-color var(--gui-duration-fast) var(--gui-easing-standard),
+    box-shadow var(--gui-duration-fast) var(--gui-easing-standard);
+}
+
+.gui-input,
+.gui-select {
+  min-height: var(--gui-control-height-md);
+  padding: 0 var(--gui-space-3);
+}
+
+.gui-select {
+  appearance: none;
+  padding-right: 38px;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--gui-color-text-muted) 50%),
+    linear-gradient(135deg, var(--gui-color-text-muted) 50%, transparent 50%);
+  background-position:
+    calc(100% - 17px) 50%,
+    calc(100% - 12px) 50%;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+  cursor: pointer;
+}
+
+.gui-select:hover:not(:disabled) {
+  border-color: var(--gui-color-text-muted);
+  background-color: var(--gui-color-surface-subtle);
+}
+
+.gui-select:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.gui-textarea {
+  min-height: 88px;
+  padding: var(--gui-space-3);
+  resize: vertical;
+}
+
+.gui-input::placeholder,
+.gui-textarea::placeholder {
+  color: var(--gui-color-text-tertiary);
+}
+
+.gui-root :is(.gui-input, .gui-select, .gui-textarea, .gui-focus-control):focus {
+  border-color: var(--gui-color-accent);
+  box-shadow: 0 0 0 2px var(--gui-color-focus-ring);
+  outline: none;
+}
+
+.gui-focus-group:focus-within {
+  --gui-focus-border-color: var(--gui-color-accent);
+  --gui-focus-shadow: 0 0 0 2px var(--gui-color-focus-ring);
+  border-color: var(--gui-focus-border-color);
+  box-shadow: var(--gui-focus-shadow);
+}
+
+.gui-root .gui-focus-group :is(input, select, textarea):focus {
+  outline: none;
+  box-shadow: none;
+}
+
+/* 文本控件不使用浏览器默认焦点框，外层组件继续负责显示统一焦点态。 */
+.gui-root :where(
+  input:not([type]),
+  input[type="text"],
+  input[type="search"],
+  input[type="email"],
+  input[type="url"],
+  input[type="tel"],
+  input[type="password"],
+  input[type="number"],
+  input[type="date"],
+  input[type="datetime-local"],
+  input[type="month"],
+  input[type="time"],
+  input[type="week"],
+  textarea,
+  select,
+  [contenteditable="true"]
+):is(:focus, :focus-visible) {
+  outline: none !important;
+}
+
+.gui-root input[type="search"] {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.gui-card,
+.gui-panel {
+  border: 1px solid var(--gui-color-border-soft);
+  background: var(--gui-color-surface);
+}
+
+.gui-card {
+  border-radius: var(--gui-radius-lg);
+  padding: var(--gui-space-4);
+  box-shadow: var(--gui-shadow-sm);
+}
+
+.gui-panel {
+  border-radius: var(--gui-radius-xl);
+  overflow: hidden;
+}
+
+.gui-panel-header {
+  min-height: var(--gui-header-height);
+  display: flex;
+  align-items: center;
+  gap: var(--gui-space-3);
+  padding: 0 var(--gui-space-4);
+  border-bottom: 1px solid var(--gui-color-border-soft);
+}
+
+.gui-panel-body {
+  padding: var(--gui-space-4);
+}
+
+.gui-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 0 var(--gui-space-2);
+  border-radius: var(--gui-radius-pill);
+  background: var(--gui-color-surface-subtle);
+  color: var(--gui-color-text-muted);
+  font-size: var(--gui-font-size-xs);
+  font-weight: var(--gui-font-weight-semibold);
+}
+
+.gui-badge[data-tone="accent"] {
+  background: var(--gui-color-accent-soft);
+  color: var(--gui-color-text);
+}
+
+.gui-badge[data-tone="success"] {
+  background: var(--gui-color-success-soft);
+  color: var(--gui-color-text);
+}
+
+.gui-badge[data-tone="warning"] {
+  background: var(--gui-color-warning-soft);
+  color: var(--gui-color-warning);
+}
+
+.gui-badge[data-tone="danger"] {
+  background: var(--gui-color-danger-soft);
+  color: var(--gui-color-danger);
+}
+
+.gui-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gui-space-3);
+}
+
+.gui-cluster {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--gui-space-2);
+}
+
+.gui-muted {
+  color: var(--gui-color-text-muted);
+}
+
+.gui-heading {
+  margin: 0;
+  color: var(--gui-color-text);
+  font-size: var(--gui-font-size-lg);
+  line-height: var(--gui-line-height-tight);
+  font-weight: var(--gui-font-weight-semibold);
+}
+
+.gui-subheading {
+  margin: 0;
+  color: var(--gui-color-text);
+  font-size: var(--gui-font-size-md);
+  font-weight: var(--gui-font-weight-semibold);
+}
+
+/* ===== 文字角色层（typography roles）=====
+ * 每个角色把 字号 + 行高 + 字重 + 字距（+ 等宽族）打包成一个语义类。
+ * 模板/组件优先用这些类，而不是散装写 font-size/line-height/font-weight。 */
+.gui-text-display {
+  font-size: var(--gui-font-size-3xl);
+  line-height: var(--gui-line-height-tight);
+  font-weight: var(--gui-font-weight-bold);
+  letter-spacing: -0.025em;
+}
+
+.gui-text-title {
+  font-size: var(--gui-font-size-xl);
+  line-height: var(--gui-line-height-tight);
+  font-weight: var(--gui-font-weight-semibold);
+  letter-spacing: -0.01em;
+}
+
+.gui-text-heading {
+  font-size: var(--gui-font-size-lg);
+  line-height: var(--gui-line-height-tight);
+  font-weight: var(--gui-font-weight-semibold);
+}
+
+.gui-text-subheading {
+  font-size: var(--gui-font-size-md);
+  line-height: var(--gui-line-height-tight);
+  font-weight: var(--gui-font-weight-semibold);
+}
+
+.gui-text-body {
+  font-size: var(--gui-font-size-md);
+  line-height: var(--gui-line-height-normal);
+  font-weight: var(--gui-font-weight-regular);
+}
+
+.gui-text-body-strong {
+  font-size: var(--gui-font-size-md);
+  line-height: var(--gui-line-height-normal);
+  font-weight: var(--gui-font-weight-semibold);
+}
+
+.gui-text-label {
+  font-size: var(--gui-font-size-sm);
+  line-height: var(--gui-line-height-tight);
+  font-weight: var(--gui-font-weight-semibold);
+}
+
+.gui-text-caption {
+  font-size: var(--gui-font-size-xs);
+  line-height: var(--gui-line-height-normal);
+  font-weight: var(--gui-font-weight-regular);
+}
+
+.gui-text-micro {
+  font-size: var(--gui-font-size-2xs);
+  line-height: var(--gui-line-height-tight);
+  font-weight: var(--gui-font-weight-medium);
+}
+
+.gui-text-eyebrow {
+  font-size: var(--gui-font-size-2xs);
+  line-height: 1;
+  font-weight: var(--gui-font-weight-bold);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.gui-text-code {
+  font-family: var(--gui-font-mono);
+  font-size: var(--gui-font-size-xs);
+  line-height: var(--gui-line-height-normal);
+}
+
+.gui-empty {
+  min-height: 160px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: var(--gui-space-2);
+  padding: var(--gui-space-6);
+  border: 1px dashed var(--gui-color-border);
+  border-radius: var(--gui-radius-lg);
+  color: var(--gui-color-text-muted);
+  text-align: center;
+}
+
+.gui-toast {
+  display: flex;
+  align-items: center;
+  gap: var(--gui-space-3);
+  max-width: 360px;
+  padding: var(--gui-space-3) var(--gui-space-4);
+  border: 1px solid var(--gui-color-border);
+  border-radius: var(--gui-radius-lg);
+  background: var(--gui-color-surface);
+  box-shadow: var(--gui-shadow-md);
+  color: var(--gui-color-text);
+  font-size: var(--gui-font-size-sm);
+}
+
+.gui-skeleton {
+  min-height: 12px;
+  border-radius: var(--gui-radius-pill);
+  background: linear-gradient(
+    90deg,
+    var(--gui-color-surface-subtle),
+    var(--gui-color-border-soft),
+    var(--gui-color-surface-subtle)
+  );
+  background-size: 220% 100%;
+  animation: gui-skeleton 1.4s ease-in-out infinite;
+}
+
+@keyframes gui-skeleton {
+  from { background-position: 100% 0; }
+  to { background-position: -100% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gui-skeleton {
+    animation: none;
+  }
+}

@@ -1,0 +1,32 @@
+- insert:
+    - id: speech-to-text
+      name: '@deepseek-ai/dsh-experimental-speech-to-text'
+      config:
+        defaultProvider: sensevoice-local
+        language: zh
+    - id: speech-to-text-sensevoice
+      name: '@deepseek-ai/dsh-experimental-speech-to-text-sensevoice'
+      config:
+        dataRoot: !!js dshHomePath('speech-to-text', 'sensevoice')
+    - id: telos-bootstrap
+      name: telos-native-validation/bootstrap
+    - id: telos-wechat
+      name: telos-native-validation
+    - id: telos-apple
+      name: telos-native-validation/apple
+    - id: telos-maps
+      name: telos-native-validation/maps
+    - id: tool-todo
+      name: '@deepseek-ai/dsh-tool-todo'
+      config:
+        allowParallelInProgress: false
+    - id: skill
+      name: '@deepseek-ai/dsh-skill'
+    - id: skill-filesystem
+      name: '@deepseek-ai/dsh-skill-filesystem'
+      config:
+        includeDefaultRoots: false
+        customSkillDirs: []
+        watch: false
+    - id: tool-skill
+      name: '@deepseek-ai/dsh-tool-skill'

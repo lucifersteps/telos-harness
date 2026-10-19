@@ -1,0 +1,201 @@
+"""由 Harness 插件拥有的本机组件与微信收发。没有模型循环或 Harness 子进程。"""
+from __future__ import annotations
+import argparse
+import asyncio
+import base64
+from dataclasses import asdict
+import getpass
+import hashlib
+import json
+import logging
+import os
+from pathlib import Path
+import signal
+import sys
+import time
+import tempfile
+import aiohttp
+
+from channel import Channel
+from settings import read_config,write_config
+from telos.adapters.base import ConversationRef
+from telos.adapters.wechat.adapter import WeChatAdapter
+from telos.adapters.wechat.config import WeChatConfig
+from telos.adapters.wechat.inbound import normalize_wechat_event
+from telos.connectors.voice import to_wav,VoiceInputError,decode_silk
+from telos.adapters.wechat.login import run_wechat_qr_login
+from telos.adapters.wechat.media import create_wechat_media_resolver,item_type_value
+from telos.adapters.wechat.state import WeChatStateStore
+from telos.core.process_lock import SingleInstanceLock
+from telos.tools.apple.service import AppleService,PersonalAppleClient
+
+
+def helper_path(config):
+    if config.get('apple_helper'):return Path(config['apple_helper']).expanduser().resolve()
+    return Path(sys.executable).resolve().parent.parent/'native/Telos Harness Apple.app/Contents/MacOS/telos-apple'
+
+
+def wechat_config(config,store):
+    value=config.get('wechat',{})
+    account=store.load_default_account()
+    return WeChatConfig(account_id=account.account_id if account else '',
+        base_url=value.get('base_url','https://ilinkai.weixin.qq.com'),
+        cdn_base_url=value.get('cdn_base_url','https://novac2c.cdn.weixin.qq.com/c2c'),
+        allowed_users=[account.user_id] if account and account.user_id else [],
+        dm_policy='allowlist',group_policy='disabled',split_multiline_messages=False)
+
+
+class WeChatChannel(Channel):
+    def __init__(self,root,apple,adapter,**kwargs):
+        super().__init__(root,apple,adapter,**kwargs)
+        with self.business.db() as db:
+            db.execute('CREATE TABLE IF NOT EXISTS channel_refs (session TEXT PRIMARY KEY, value TEXT)')
+            db.execute('CREATE TABLE IF NOT EXISTS channel_cursor (id INTEGER PRIMARY KEY CHECK(id=1), value TEXT)')
+            row=db.execute('SELECT value FROM channel_cursor WHERE id=1').fetchone()
+        if row:adapter.set_sync_buf(row[0])
+        self.inflight=set()
+
+    async def consume(self,turn,raw,session,key):
+        try:
+            media_root=self.root/'media';media_root.mkdir(exist_ok=True,mode=0o700)
+            with tempfile.TemporaryDirectory(prefix='input-',dir=media_root) as directory:
+                resolver=create_wechat_media_resolver(self.adapter.config,media_dir=directory,voice_transcriber=self.transcribe)
+                media=await resolver(raw)
+                resolved=normalize_wechat_event(media,account_id=self.adapter.config.account_id)
+                blocks=[]
+                for attachment in resolved.attachments:
+                    if attachment.kind=='image':
+                        path=Path(attachment.uri.removeprefix('file://'))
+                        # Only admit files produced by this download, never a message-supplied local path.
+                        if path.is_file() and path.parent.resolve()==Path(directory).resolve():
+                            blocks.append({'type':'image','mimeType':attachment.mime_type or 'image/jpeg',
+                                           'data':base64.b64encode(path.read_bytes()).decode()})
+                image_count=sum((item_type_value(i)==2)+(item_type_value((i.get('ref_msg') or {}).get('message_item') or {})==2) for i in raw.get('item_list',raw.get('items',[])))
+                text=resolved.text or ('请理解图片内容。' if blocks else '本条消息未能解析，请重新发送文字。')
+                if image_count>len(blocks):text='[部分或全部图片下载或解密失败，缺失图片内容未知，请告知用户重新发送。]\n'+text
+            with self.business.db() as db:db.execute('UPDATE messages SET input=? WHERE id=?',(text,key))
+            await self.handle(session,key,text,turn.ref,blocks=blocks,accepted=True)
+        except Exception:
+            logging.exception('微信消息处理失败')
+            self.business.save_reply(key,'本条消息未能处理，请重新发送；不会自动重复写入。')
+            await self.business.deliver(session,key,self.adapter,turn.ref)
+
+    async def transcribe(self,data,metadata):
+        wav=await to_wav(data,metadata,work_root=self.root/'media')
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=160)) as client:
+            async with client.post(self.ready.result()+'/transcribe',headers={'Authorization':'Bearer '+self.token},
+                json={'audio':base64.b64encode(wav).decode()}) as response:
+                if response.status!=200:
+                    raise VoiceInputError('本地语音识别未完成，请检查 --telos-status，或重新发送文字。')
+                return (await response.json())['text']
+
+    async def poll(self):
+        await self.ready
+        with self.business.db() as db:refs=db.execute('SELECT session,value FROM channel_refs').fetchall()
+        for session,value in refs:await self.recover(session,ConversationRef(**json.loads(value)))
+        while True:
+            result=await self.adapter.poll_once()
+            if not result.ok:
+                logging.warning('微信轮询失败；稍后重新连接')
+                await asyncio.sleep(2);continue
+            for raw in result.messages:
+                turn=self.adapter.accept_raw_event(raw)
+                if not turn:continue
+                session='wechat-'+hashlib.sha256((turn.ref.tenant_id+'\0'+turn.ref.source_id).encode()).hexdigest()[:32]
+                identity=turn.raw_event_id or json.dumps(raw,sort_keys=True,ensure_ascii=False)
+                key='wechat-'+hashlib.sha256((session+'\0'+identity).encode()).hexdigest()
+                # Persist acceptance and destination before advancing the remote cursor.
+                with self.business.db() as db:
+                    fresh=db.execute('INSERT OR IGNORE INTO messages(id,session,input) VALUES(?,?,?)',(key,session,turn.text)).rowcount
+                    db.execute('INSERT OR REPLACE INTO channel_refs VALUES(?,?)',(session,json.dumps(asdict(turn.ref))))
+                if fresh:
+                    task=asyncio.create_task(self.consume(turn,raw,session,key))
+                    self.inflight.add(task);task.add_done_callback(self.inflight.discard)
+            with self.business.db() as db:db.execute('INSERT OR REPLACE INTO channel_cursor VALUES(1,?)',(result.sync_buf,))
+            self.adapter.commit_poll_result(result)
+            if not result.messages:await asyncio.sleep(.2)
+
+
+async def serve(root,harness_home,config):
+    token=os.environ.pop('TELOS_BUSINESS_TOKEN')
+    store=WeChatStateStore(root/'wechat');wc=wechat_config(config,store)
+    if config['wechat'].get('enabled') and (not wc.account_id or not wc.allowed_users):
+        raise ValueError('请先运行 --telos-login 完成微信扫码；没有启动轮询。')
+    adapter=WeChatAdapter(config=wc,state_store=store)
+    apple=AppleService(PersonalAppleClient(helper_path(config)),root/'apple')
+    channel=WeChatChannel(root,apple,adapter,harness_home=harness_home,token=token)
+    stopped=asyncio.Event();loop=asyncio.get_running_loop()
+    for sig in (signal.SIGINT,signal.SIGTERM):loop.add_signal_handler(sig,stopped.set)
+    # Parent death closes the pipe. No restart policy or orphan polling process.
+    loop.add_reader(sys.stdin.fileno(),lambda: stopped.set() if not os.read(sys.stdin.fileno(),4096) else None)
+    polling=asyncio.create_task(channel.poll()) if config['wechat'].get('enabled') else None
+    if polling:polling.add_done_callback(lambda t:stopped.set())
+    print(json.dumps({'protocol':1,'url':f'http://127.0.0.1:{channel.server.server_port}'}),flush=True)
+    try:
+        await stopped.wait()
+        if polling and polling.done():polling.result()
+    finally:
+        loop.remove_reader(sys.stdin.fileno())
+        if polling:polling.cancel();await asyncio.gather(polling,return_exceptions=True)
+        # Graceful plugin shutdown allows in-flight receipts to settle; no writes are replayed on restart.
+        if channel.inflight:
+            done,pending=await asyncio.wait(channel.inflight,timeout=5)
+            for task in pending:task.cancel()
+            await asyncio.gather(*pending,return_exceptions=True)
+        await adapter.close_media();await channel.close()
+
+
+async def command(args):
+    root=Path(args.home).expanduser().resolve();root.mkdir(parents=True,exist_ok=True,mode=0o700)
+    config=read_config(root)
+    lock=SingleInstanceLock(root/'instance.lock')
+    deadline=time.monotonic()+(8 if args.command=='serve' else 0)
+    while args.command!='status' and not lock.acquire():
+        if time.monotonic()>=deadline:raise ValueError('该 Telos 数据目录已有运行实例；请先停止它，不会抢占或终止进程。')
+        await asyncio.sleep(.1)
+    try:
+        if args.command=='setup':
+            secrets={}
+            for name,label in [('DEEPSEEK_API_KEY','DeepSeek API Key'),('BAIDU_MAP_AUTH_TOKEN','百度地图 Token（可留空）')]:
+                value=os.environ.get(name)
+                if value is None:value=getpass.getpass(label+': ',stream=sys.stderr)
+                if value:secrets[name]=value
+            config['model']=os.environ.get('TELOS_MODEL',config['model'])
+            config['base_url']=os.environ.get('DEEPSEEK_BASE_URL',config['base_url'])
+            write_config(root,config)
+            print(json.dumps({'credentials':secrets}),flush=True) # private pipe consumed by Harness; never terminal output
+        elif args.command=='login':
+            store=WeChatStateStore(root/'wechat')
+            def challenge(value):
+                import segno
+                print('请用微信扫描二维码：',file=sys.stderr)
+                segno.make(value.scan_data).terminal(out=sys.stderr,compact=True)
+            result=await run_wechat_qr_login(wechat_config(config,store),state_store=store,challenge_callback=challenge)
+            if not result.ok:raise ValueError('微信登录未完成：'+result.error)
+            if not result.account.user_id:raise ValueError('微信登录缺少用户标识；没有开启轮询。')
+            config['wechat']['enabled']=True;write_config(root,config)
+            print(json.dumps({'wechat_login':True}))
+        elif args.command=='authorize':
+            result=await asyncio.to_thread(PersonalAppleClient(helper_path(config)).request,'authorize',{})
+            print(json.dumps({'apple':result}))
+        elif args.command=='status':
+            try:apple=PersonalAppleClient(helper_path(config)).request('status',{})
+            except Exception:apple={'status':'unavailable'}
+            print(json.dumps({'configuration':(root/'config.json').exists(),'wechat_enabled':config['wechat'].get('enabled',False),
+                'wechat_login':bool(WeChatStateStore(root/'wechat').load_default_account()),'apple':apple}))
+        else:await serve(root,Path(args.harness_home),config)
+    finally:lock.release()
+
+
+def main():
+    os.umask(0o077)
+    if len(sys.argv)==4 and sys.argv[1]=='decode-silk':
+        decode_silk(sys.argv[2],sys.argv[3]);return 0
+    parser=argparse.ArgumentParser();parser.add_argument('command',choices=['setup','login','authorize','status','serve'])
+    parser.add_argument('--home',required=True);parser.add_argument('--harness-home')
+    args=parser.parse_args()
+    try:asyncio.run(command(args))
+    except Exception as error:
+        print('Telos: '+str(error),file=sys.stderr);return 1
+    return 0
+if __name__=='__main__':raise SystemExit(main())

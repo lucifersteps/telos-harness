@@ -1,0 +1,271 @@
+/* Telos 新界面的唯一视觉变量来源。
+ * 分两层：
+ *   ① Primitive（--gp-*）：原始值、与主题无关，只在本文件内被语义层引用，业务样式永不直接使用。
+ *   ② Semantic（--gui-*）：带意图的语义变量，业务样式只引用这一层；换主题/换品牌时只改这里的映射。
+ * 尺寸/节奏刻度（space/radius/font-size/duration 等）也归在 Primitive 段，作为“刻度 token”直接被消费。
+ * 颜色只在本文件出现；派生色（*-soft/border/scrim）用 color-mix 从 primitive 推导，避免复制通道值造成漂移。 */
+:root {
+  color-scheme: light;
+
+  /* ===== ① Primitive：中性色阶（暖灰，浅→深，跨主题共用） ===== */
+  --gp-neutral-0: #ffffff;
+  --gp-neutral-50: #fafaf6;
+  --gp-neutral-75: #f5f5ef;
+  --gp-neutral-100: #f4f4ee;
+  --gp-neutral-150: #f2f2ed;
+  --gp-neutral-200: #ecece6;
+  --gp-neutral-250: #e7e7e1;
+  --gp-neutral-300: #e2e2dc;
+  --gp-neutral-400: #d7d7d1;
+  --gp-neutral-420: #d7d7cf;
+  --gp-neutral-500: #b8b8b0;
+  --gp-neutral-600: #8c8d85;
+  --gp-neutral-680: #61625c;
+  --gp-neutral-720: #55564f;
+  --gp-neutral-800: #343530;
+  --gp-neutral-860: #20221d;
+  --gp-neutral-880: #1b1d19;
+  --gp-neutral-900: #171915;
+  --gp-neutral-940: #11120f;
+  --gp-neutral-950: #10110f;
+  --gp-neutral-960: #0e100d;
+  --gp-neutral-980: #090a08;
+
+  /* ===== ① Primitive：品牌与状态色（各含浅/深主题所需色阶） ===== */
+  --gp-clay-600: #b05a30;
+  --gp-clay-400: #e08a50;
+  --gp-green-600: #3f7149;
+  --gp-green-300: #8fd19a;
+  --gp-amber-700: #7b5a13;
+  --gp-amber-400: #e1ba63;
+  --gp-red-600: #c92d2d;
+  --gp-red-400: #f76d6d;
+  --gp-indigo-600: #4154bb;
+  --gp-indigo-300: #9caaff;
+  --gp-overlay: #1f1e1c;
+
+  /* ===== ① Primitive：代码/终端表面（始终深色，跨主题一致） ===== */
+  --gp-code-bg: #171816;
+  --gp-code-fg: #c9cbc3;
+  --gp-code-border: #696c64;
+  --gp-code-muted: #80837a;
+  --gp-code-secondary: #85887f;
+  --gp-code-green: #80aa87;
+  --gp-code-amber: #d5b66c;
+  --gp-code-red: #e58484;
+
+  /* ===== ① Primitive：数据可视化分类色（浅色主题） ===== */
+  --gp-data-1: #376ea5;
+  --gp-data-2: #c26022;
+  --gp-data-3: #3e7c4e;
+  --gp-data-4: #7a58a6;
+  --gp-data-5: #b84455;
+  --gp-data-6: #287d86;
+  --gp-data-7: #98721a;
+  --gp-data-8: #a24588;
+  --gp-data-9: #687a2d;
+  --gp-data-10: #735344;
+  /* 数据可视化分类色（深色主题） */
+  --gp-data-dark-1: #78a9e0;
+  --gp-data-dark-2: #e89a58;
+  --gp-data-dark-3: #79b987;
+  --gp-data-dark-4: #b79add;
+  --gp-data-dark-5: #e68190;
+  --gp-data-dark-6: #6bb8bf;
+  --gp-data-dark-7: #d1b15c;
+  --gp-data-dark-8: #d988be;
+  --gp-data-dark-9: #abb969;
+  --gp-data-dark-10: #b9927f;
+
+  /* ===== ① Primitive：尺寸/节奏刻度（无语义，直接作为刻度消费） ===== */
+  --gui-font-size-3xs: 9px;
+  --gui-font-size-2xs: 10px;
+  --gui-font-size-xs: 11px;
+  --gui-font-size-sm: 12px;
+  --gui-font-size-md: 14px;
+  --gui-font-size-lg: 17px;
+  --gui-font-size-xl: 22px;
+  --gui-font-size-2xl: 28px;
+  --gui-font-size-3xl: 34px;
+  --gui-line-height-tight: 1.25;
+  --gui-line-height-snug: 1.4;
+  --gui-line-height-normal: 1.5;
+  --gui-line-height-relaxed: 1.65;
+  --gui-font-weight-regular: 400;
+  --gui-font-weight-medium: 500;
+  --gui-font-weight-semibold: 600;
+  --gui-font-weight-bold: 700;
+  --gui-font-sans: -apple-system, "SF Pro Text", "PingFang SC", "Helvetica Neue", "Microsoft YaHei", sans-serif;
+  --gui-font-mono: "SFMono-Regular", "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+  --gui-tracking-tight: -0.02em;
+  --gui-tracking-tighter: -0.04em;
+  --gui-tracking-wide: 0.08em;
+  --gui-tracking-wider: 0.14em;
+
+  --gui-space-1: 4px;
+  --gui-space-2: 8px;
+  --gui-space-3: 12px;
+  --gui-space-4: 16px;
+  --gui-space-5: 20px;
+  --gui-space-6: 24px;
+  --gui-space-8: 32px;
+  --gui-space-10: 40px;
+  --gui-space-11: 44px;
+  --gui-space-12: 48px;
+  --gui-space-14: 56px;
+  --gui-space-16: 64px;
+  --gui-space-18: 72px;
+
+  --gui-radius-sm: 2px;
+  --gui-radius-md: 3px;
+  --gui-radius-lg: 4px;
+  --gui-radius-xl: 6px;
+  --gui-radius-pill: 999px;
+
+  --gui-icon-stroke: 1.5;
+  --gui-icon-stroke-bold: 1.8;
+
+  --gui-control-height-sm: 30px;
+  --gui-control-height-md: 36px;
+  --gui-control-height-lg: 42px;
+  --gui-rail-width: 84px;
+  --gui-agent-width: 380px;
+  --gui-header-height: 52px;
+
+  --gui-duration-fast: 100ms;
+  --gui-duration-normal: 160ms;
+  --gui-duration-slow: 220ms;
+  /* 交互动效上限（DESIGN.md: 150–360ms），用于较慢的一次性进出场 */
+  --gui-duration-slower: 360ms;
+  --gui-easing-standard: cubic-bezier(0.2, 0, 0, 1);
+  --gui-easing-emphasized: cubic-bezier(0.22, 1, 0.36, 1);
+
+  --gui-z-base: 1;
+  --gui-z-dropdown: 100;
+  --gui-z-sticky: 200;
+  --gui-z-drawer: 300;
+  --gui-z-modal: 400;
+  --gui-z-toast: 500;
+  --gui-z-tooltip: 600;
+
+  /* ===== ② Semantic：颜色（浅色主题映射；业务样式只用这一层） ===== */
+  --gui-color-canvas: var(--gp-neutral-400);
+  --gui-color-surface: var(--gp-neutral-150);
+  --gui-color-surface-subtle: var(--gp-neutral-250);
+  --gui-color-navigation: var(--gp-neutral-300);
+  --gui-color-text: var(--gp-neutral-950);
+  --gui-color-text-secondary: var(--gp-neutral-800);
+  --gui-color-text-muted: var(--gp-neutral-720);
+  --gui-color-text-tertiary: var(--gp-neutral-680);
+  --gui-color-border: color-mix(in srgb, var(--gp-neutral-950) 30%, transparent);
+  --gui-color-border-soft: color-mix(in srgb, var(--gp-neutral-950) 14%, transparent);
+  --gui-color-accent: var(--gp-clay-600);
+  --gui-color-accent-soft: color-mix(in srgb, var(--gp-clay-600) 14%, transparent);
+  --gui-color-on-accent: var(--gp-neutral-0);
+  --gui-color-success: var(--gp-green-600);
+  --gui-color-success-soft: color-mix(in srgb, var(--gp-green-600) 15%, transparent);
+  --gui-color-on-success: var(--gp-neutral-0);
+  --gui-color-warning: var(--gp-amber-700);
+  --gui-color-warning-soft: color-mix(in srgb, var(--gp-amber-700) 15%, transparent);
+  --gui-color-danger: var(--gp-red-600);
+  --gui-color-danger-soft: color-mix(in srgb, var(--gp-red-600) 12%, transparent);
+  --gui-color-on-danger: var(--gp-neutral-0);
+  --gui-color-info: var(--gp-indigo-600);
+  --gui-color-info-soft: color-mix(in srgb, var(--gp-indigo-600) 13%, transparent);
+  --gui-color-info-muted: color-mix(in srgb, var(--gui-color-info) 35%, var(--gui-color-text-muted));
+  --gui-color-data-1: var(--gp-data-1);
+  --gui-color-data-2: var(--gp-data-2);
+  --gui-color-data-3: var(--gp-data-3);
+  --gui-color-data-4: var(--gp-data-4);
+  --gui-color-data-5: var(--gp-data-5);
+  --gui-color-data-6: var(--gp-data-6);
+  --gui-color-data-7: var(--gp-data-7);
+  --gui-color-data-8: var(--gp-data-8);
+  --gui-color-data-9: var(--gp-data-9);
+  --gui-color-data-10: var(--gp-data-10);
+  --gui-color-scrim: color-mix(in srgb, var(--gp-overlay) 32%, transparent);
+  --gui-color-focus: var(--gui-color-accent);
+  --gui-color-focus-ring: color-mix(in srgb, var(--gui-color-accent) 30%, transparent);
+  --gui-color-paper-canvas: var(--gp-neutral-50);
+  --gui-color-paper-surface: var(--gp-neutral-0);
+  --gui-color-paper-subtle: var(--gp-neutral-200);
+  --gui-color-paper-raised: var(--gp-neutral-50);
+  --gui-color-inverse: var(--gp-neutral-950);
+  --gui-color-on-inverse: var(--gp-neutral-75);
+  --gui-color-code-canvas: var(--gp-code-bg);
+  --gui-color-code-text: var(--gp-code-fg);
+  --gui-color-code-border: var(--gp-code-border);
+  --gui-color-code-muted: var(--gp-code-muted);
+  --gui-color-code-secondary: var(--gp-code-secondary);
+  --gui-color-code-success: var(--gp-code-green);
+  --gui-color-code-warning: var(--gp-code-amber);
+  --gui-color-code-danger: var(--gp-code-red);
+  --gui-color-code-hover: color-mix(in srgb, var(--gp-neutral-0) 4%, transparent);
+  /* 二维码画布：任何主题下都保持纯白（功能需求，dark 块中不覆盖） */
+  --gui-color-qr-canvas: var(--gp-neutral-0);
+
+  --gui-shadow-sm: 0 4px 16px rgb(16 17 15 / 7%);
+  --gui-shadow-md: 0 14px 42px rgb(16 17 15 / 13%);
+  --gui-shadow-lg: 0 24px 80px rgb(16 17 15 / 18%);
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  /* ===== ② Semantic：颜色（深色主题映射到同一套 primitive） ===== */
+  --gui-color-canvas: var(--gp-neutral-980);
+  --gui-color-surface: var(--gp-neutral-960);
+  --gui-color-surface-subtle: var(--gp-neutral-900);
+  --gui-color-navigation: var(--gp-neutral-940);
+  --gui-color-text: var(--gp-neutral-100);
+  --gui-color-text-secondary: var(--gp-neutral-420);
+  --gui-color-text-muted: var(--gp-neutral-500);
+  --gui-color-text-tertiary: var(--gp-neutral-600);
+  --gui-color-border: color-mix(in srgb, var(--gp-neutral-100) 32%, transparent);
+  --gui-color-border-soft: color-mix(in srgb, var(--gp-neutral-100) 16%, transparent);
+  --gui-color-accent: var(--gp-clay-400);
+  --gui-color-accent-soft: color-mix(in srgb, var(--gp-clay-400) 17%, transparent);
+  --gui-color-on-accent: var(--gp-neutral-950);
+  --gui-color-success: var(--gp-green-300);
+  --gui-color-success-soft: color-mix(in srgb, var(--gp-green-300) 16%, transparent);
+  --gui-color-on-success: var(--gp-neutral-950);
+  --gui-color-warning: var(--gp-amber-400);
+  --gui-color-warning-soft: color-mix(in srgb, var(--gp-amber-400) 17%, transparent);
+  --gui-color-danger: var(--gp-red-400);
+  --gui-color-danger-soft: color-mix(in srgb, var(--gp-red-400) 16%, transparent);
+  --gui-color-on-danger: var(--gp-neutral-950);
+  --gui-color-info: var(--gp-indigo-300);
+  --gui-color-info-soft: color-mix(in srgb, var(--gp-indigo-300) 17%, transparent);
+  --gui-color-data-1: var(--gp-data-dark-1);
+  --gui-color-data-2: var(--gp-data-dark-2);
+  --gui-color-data-3: var(--gp-data-dark-3);
+  --gui-color-data-4: var(--gp-data-dark-4);
+  --gui-color-data-5: var(--gp-data-dark-5);
+  --gui-color-data-6: var(--gp-data-dark-6);
+  --gui-color-data-7: var(--gp-data-dark-7);
+  --gui-color-data-8: var(--gp-data-dark-8);
+  --gui-color-data-9: var(--gp-data-dark-9);
+  --gui-color-data-10: var(--gp-data-dark-10);
+  --gui-color-scrim: rgb(0 0 0 / 54%);
+  --gui-color-focus: var(--gui-color-accent);
+  --gui-color-focus-ring: color-mix(in srgb, var(--gui-color-accent) 40%, transparent);
+  --gui-color-paper-canvas: var(--gp-neutral-940);
+  --gui-color-paper-surface: var(--gp-neutral-900);
+  --gui-color-paper-subtle: var(--gp-neutral-860);
+  --gui-color-paper-raised: var(--gp-neutral-880);
+  --gui-color-inverse: var(--gp-neutral-100);
+  --gui-color-on-inverse: var(--gp-neutral-950);
+
+  --gui-shadow-sm: 0 4px 16px rgb(0 0 0 / 22%);
+  --gui-shadow-md: 0 14px 42px rgb(0 0 0 / 32%);
+  --gui-shadow-lg: 0 24px 80px rgb(0 0 0 / 40%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --gui-duration-fast: 0.01ms;
+    --gui-duration-normal: 0.01ms;
+    --gui-duration-slow: 0.01ms;
+    --gui-duration-slower: 0.01ms;
+  }
+}
