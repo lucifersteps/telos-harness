@@ -2,6 +2,10 @@
 
 0.4.10 适用于 macOS 14+ Apple Silicon、官方 Node/CLI 或官网桌面版 DeepSeek Harness 0.2.1-rc.2。安装包包含 Python 运行环境和编译后的 Apple helper，不需要用户安装 Python、Homebrew 或 Xcode。
 
+首次使用请先阅读 [项目首页](https://github.com/lucifersteps/telos-harness#readme) 和 [AI 安装指南](https://github.com/lucifersteps/telos-harness/blob/main/docs/install-for-ai.md)，遇到问题查看 [排障指南](https://github.com/lucifersteps/telos-harness/blob/main/docs/troubleshooting.md)。本文保留详细配置与功能说明；安装旧版本时请阅读对应 tag 的文档。
+
+首次配置默认开启 Apple 日历与提醒事项，并引导用户授予两项 macOS 权限；百度地图和语音可按需开启。程序当前默认同时开启 Apple 和地图，没有百度 Token 时请在首次配置中关闭地图。暂时不授权 Apple 不影响先使用微信聊天，但 Apple 功能尚未就绪。
+
 ## 职责与依赖
 
 Telos 只提供微信收发、Apple/百度地图工具、随包 Skill 内容、确认和防重复写入。DSH 提供循环、历史、模型连接、凭据、Skill 服务、任务清单和可选语音服务。插件只安装一个 Telos 入口，不修改宿主的全局模型、提示词、工具开关或语音选择。
@@ -19,8 +23,8 @@ Telos 只提供微信收发、Apple/百度地图工具、随包 Skill 内容、�
 1. 在“插件 → 添加插件”安装 `telos-harness-0.4.10-macos-arm64.tgz` 并启用。
 2. 在 Telos 页选择模型：跟随 DSH 默认模型、使用 DeepSeek 账号、选择已有 API 模型，或展开“添加其他 API 模型”。账号登录直接打开 DSH 原生入口；API 模型支持 OpenAI Chat Completions、Responses 与 Anthropic Messages 协议。
 3. 在页面输入模型 API Key 或百度 Token，点击“保存到 DSH”。凭据直接调用 DSH credentials 服务，不经过 Telos 后端、不进入 Telos 配置或聊天，也不回显已存密钥。添加的 API Provider 通过 DSH settings 持久化；微信独立模型选择不会改变宿主默认模型。无模型列表时保存 Key 后刷新目录，也可手动填写准确的模型 ID。
-4. 选择微信人设，按需开启 Apple 和百度地图，点击“保存并应用”。运行中应用配置会短暂重启 Telos，保留历史、待确认操作和防重复写入记录。
-5. 微信扫码登录，按需授权 Apple，再点击“启动 Telos”；以后打开应用或重新启用插件会恢复已登录实例。重新扫码和授权前需停止 Telos。
+4. 选择微信人设，保留 Apple 开启，百度地图按需开启，点击“保存并应用”。运行中应用配置会短暂重启 Telos，保留历史、待确认操作和防重复写入记录。
+5. 微信扫码登录，授权 Apple 日历与提醒事项，再点击“启动 Telos”；以后打开应用或重新启用插件会恢复已登录实例。重新扫码和授权前需停止 Telos。暂不授权时可先验证聊天，并将 Apple 标为待授权。
 
 “测试连接”只向所选模型发送一句测试文字，不加载人设、聊天或 Apple 数据，会产生少量模型调用费用。百度功能仍需单独的 `BAIDU_MAP_AUTH_TOKEN`，DeepSeek 账号不包含百度授权。关闭 Apple 会停止后台读取、撤下业务工具并拒绝确认写入；关闭地图会撤下地图工具与随包 Skill 目录。宿主另行安装的 Skill 仍归 DSH 管理，但不能绕过已关闭的执行工具。重新开启不会自动执行草稿，写入仍需用户确认。
 
@@ -45,7 +49,7 @@ export DSH_HOME="$HOME/Library/Application Support/Telos Harness"
 mkdir -p "$DSH_HOME/profiles/telos"
 ```
 
-在 `$DSH_HOME/profiles/telos/package.json` 保存：
+仅在全新 CLI 安装时采用上述目录；已有安装沿用原 DSH_HOME、TELOS_HOME 和 profile。在 `$DSH_HOME/profiles/telos/package.json` 不存在时保存以下内容；已有文件只合并所需 bundle，不整份覆盖：
 
 ```json
 {"name":"dsh-profile-telos","private":true,"dsh":{"profile":{"bundles":["@deepseek-ai/dsh-base"]}}}
@@ -58,7 +62,7 @@ DEEPSEEK_API_KEY=填写自己的模型密钥
 BAIDU_MAP_AUTH_TOKEN=填写自己的地图令牌
 ```
 
-安装并运行：
+安装包必须先下载并校验，下面 `/path/to/` 替换为实际绝对路径。安装并运行：
 
 ```sh
 dsh plugin --profile telos add telos-harness@file:/path/to/telos-harness-0.4.10-macos-arm64.tgz --offline
@@ -69,7 +73,9 @@ dsh --profile telos --telos-status
 dsh --profile telos
 ```
 
-`--telos-setup` 只创建 Telos 非敏感配置，不再要求输入 Key。`--telos-prepare-voice` 已移除，语音由宿主准备。CLI 与桌面使用相同插件包。CLI 默认不启用录音界面、多 Agent 工具或额外服务器；微信会话只开放 Telos 业务工具和原生 Skill/todo 工具。
+`--telos-setup` 只创建 Telos 非敏感配置，不再要求输入 Key。首次配置保留 `tools.apple: true`，没有地图 Token 时在登录、启动前将 `tools.maps` 设为 `false`；只合并字段，保留其他配置。`--telos-prepare-voice` 已移除，语音由宿主准备。CLI 与桌面使用相同插件包。CLI 默认不启用录音界面、多 Agent 工具或额外服务器；微信会话接入 Telos 业务工具和原生 Skill、todo、网页、当前会话历史检索及定时任务工具。
+
+最后一条命令持续运行，关闭进程会停止微信收发和调度。新终端需要重新设置同一个 DSH_HOME，以及已配置的 TELOS_HOME。`--telos-status` 显示配置、登录、权限和模型选择，不实际验证模型连通性或微信收发；安装完成后应收到微信测试回复，并成功只读查询日历和提醒事项。
 
 如需本地语音，在 DSH profile 的 `cordis.patch.yml` 启用官方模块（不属于 Telos 安装声明）：
 
