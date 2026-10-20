@@ -4,6 +4,12 @@
 
 适用版本：Telos **0.4.11**，已验证 DSH **0.2.1-rc.2**，macOS 14+ Apple Silicon。安装其他版本时，应阅读该 Release/tag 对应的文档，不要承诺旧包具有新功能。
 
+## 从仓库链接开始
+
+用户明确要求安装时，先读本指南，再执行环境检查；只有一个链接、意图不清楚时，先确认是安装还是了解项目。无需要求用户手动下载源码。GitHub 页面正文读取失败时，可以读取 [README 原文](https://raw.githubusercontent.com/lucifersteps/telos-harness/main/README.md) 和 [本指南原文](https://raw.githubusercontent.com/lucifersteps/telos-harness/main/docs/install-for-ai.md)。
+
+先确认工具操作的是**用户要运行 Telos 的那台 Mac**。Linux 云端沙箱、远程开发容器或只能聊天的 AI，不能把自己的环境检查当成用户电脑的检查。没有本机访问能力时，给出下一步本机操作并等待结果，不在沙箱中尝试安装 macOS 包。
+
 ## 执行约定
 
 - 优先复用已有安装、模型与数据目录。先识别现状，再修改；现有配置只合并必要字段，不整份覆盖。
@@ -11,6 +17,7 @@
 - 由用户本人完成账号登录、凭据输入、微信扫码及 macOS 授权。提供具体页面或本机文件位置；不要要求用户把密钥发到聊天，不打印凭据文件。
 - 环境允许的检查、下载、安装和非敏感配置可连续完成。遇到必须由用户完成的步骤时，说明正在等待什么，收到实际成功状态后继续。
 - 不把“插件文件安装成功”“模型已配置”“微信已登录”“已收到回复”混为一谈。失败时保留已完成步骤，参照 [排障指南](troubleshooting.md) 继续。
+- 如果安装 AI 本身就在目标 DSH 会话中运行，优先使用宿主的原生插件管理能力。需要退出或重启这个宿主时，先留下剩余步骤、安装包和数据目录，再交给用户或宿主外的工具完成；不要先关闭承载自己的进程而丢失后续安装步骤。
 
 <a id="preflight"></a>
 ## 1. 检查环境并选择路径
@@ -25,6 +32,21 @@ command -v dsh
 
 需要 macOS 14+ 和 arm64。若 Apple Silicon 上终端显示 `x86_64`，检查是否通过 Rosetta 运行，切换原生终端后再判断；其他平台停止安装当前包。
 
+`command -v dsh` 没有输出不等于没安装桌面版。有输出也可能是桌面自带的命令入口，不能据此认定用户在使用独立 CLI。检查正在运行的 DSH、`/Applications` 和 `~/Applications`；没有找到时询问安装位置，应用也可能被用户放在其他目录。只读取路径与版本，不打印整个进程环境或凭据。
+
+按以下顺序选择宿主：
+
+| 当前情况 | 安装路径 |
+| --- | --- |
+| 用户明确指定桌面版或 CLI | 遵从选择；已有另一套数据时先说明，不能当成自动迁移 |
+| 已有 Telos，未要求切换宿主 | 沿用实际承载它的宿主、profile 和数据目录，走升级流程 |
+| 同时存在两种方式，无法判断使用哪套 | 只确认一次实际承载 Telos 的宿主 |
+| 已有桌面版，或安装 AI 正在 DSH 桌面中运行 | 复用桌面版 |
+| 只有独立 CLI，且用户平时用它运行 DSH | 复用 CLI |
+| 完全没有 DSH，用户未指定 | 默认推荐并安装桌面版；从官方 macOS 下载入口开始 |
+
+**不能仅因为 AI 擅长终端命令就自动选择 CLI。** 桌面版有图形配置、扫码与状态页，也自带可供 AI 安装插件的 CLI；这仍是桌面安装。如果 AI 无法操作界面，可由用户完成图形步骤；改为纯 CLI 应由用户选择。
+
 记录以下非敏感信息，后续安装、配置、启动和升级都使用同一组值：
 
 | 信息 | 如何确定 |
@@ -36,7 +58,7 @@ command -v dsh
 | TELOS_HOME | 已显式设置则沿用，否则是该 DSH_HOME 下的 `telos` |
 | 已有状态 | Telos 版本、是否运行、是否已登录；只检查存在性和非敏感状态 |
 
-已安装桌面版时优先走 [桌面路径](#desktop)，不要为安装 Telos 另装一份 Node CLI 来管理桌面 profile。用户已有 CLI 运行方式时走 [CLI 路径](#cli)。同时存在两种宿主时，让用户选择实际承载机器人的一个。
+选定后只执行 [桌面路径](#desktop) 或 [CLI 路径](#cli) 中的一条。不要为管理桌面 profile 再安装一份 Node CLI，也不要两条流程都执行。
 
 已有 Telos 安装走 [升级与恢复](#upgrade)，不要把它当新安装重新扫码。宿主版本不同于已验证版本时，先查对应 Release 的兼容说明；不要自动降级用户现有 DSH。
 
@@ -45,9 +67,25 @@ command -v dsh
 
 安装来源：[Telos Releases](https://github.com/lucifersteps/telos-harness/releases)。普通使用者不需要克隆源码、安装 Python 或执行构建脚本。
 
-本指南对应 [0.4.11 Release](https://github.com/lucifersteps/telos-harness/releases/tag/v0.4.11)，附件包含安装包与 SHA256 校验文件。公开附件可直接通过浏览器下载，无需 GitHub 账号。下方 gh 命令供已配置 GitHub CLI 的环境使用；未配置时，从 Release 页面下载同名文件即可，不要为下载公开附件索要用户的令牌。若 Release 或匹配附件不可访问，明确报告原因，不要猜下载链接或自动降级。
+本指南对应 [0.4.11 Release](https://github.com/lucifersteps/telos-harness/releases/tag/v0.4.11)，附件包含安装包与 SHA256 校验文件。以下是该版已发布的固定附件地址，不依赖 GitHub API、GitHub 账号、`gh`、Git 或 Python。没有现成下载时，在用户 Mac 的终端执行：
 
-有 GitHub CLI 的环境可以先查询；没有 `gh` 时使用浏览器查看 Release 附件即可，不必为了安装 Telos 强制安装 `gh`。
+```sh
+mkdir -p "$HOME/Downloads"
+TELOS_DOWNLOAD_DIR="$(mktemp -d "$HOME/Downloads/telos-0.4.11.XXXXXX")"
+cd "$TELOS_DOWNLOAD_DIR" || exit 1
+curl --fail --location --retry 2 --connect-timeout 20 \
+  --output telos-harness-0.4.11-macos-arm64.tgz \
+  https://github.com/lucifersteps/telos-harness/releases/download/v0.4.11/telos-harness-0.4.11-macos-arm64.tgz || exit 1
+curl --fail --location --retry 2 --connect-timeout 20 \
+  --output telos-harness-0.4.11-macos-arm64.tgz.sha256 \
+  https://github.com/lucifersteps/telos-harness/releases/download/v0.4.11/telos-harness-0.4.11-macos-arm64.tgz.sha256 || exit 1
+shasum -a 256 -c telos-harness-0.4.11-macos-arm64.tgz.sha256 || exit 1
+TELOS_ARCHIVE="$TELOS_DOWNLOAD_DIR/telos-harness-0.4.11-macos-arm64.tgz"
+```
+
+每步失败即停止，不安装部分下载的文件。换到新终端时，需要重新设置 `TELOS_ARCHIVE` 为已下载文件的绝对路径。也可让用户从 Release 页面下载这两个同名附件，再在它们所在目录校验。
+
+已配置 GitHub CLI 的环境也可用下面这条替代路径，不必重复下载。没有 `gh`、未登录或匿名 GitHub API 被限流（可能返回 403）时，使用上面的直接下载方式，不为公开下载索要令牌。下载仍失败时报告实际网络或 HTTP 错误，不自动降级、猜新版本地址或改用第三方镜像。
 
 ```sh
 gh release list --repo lucifersteps/telos-harness --limit 10
@@ -84,7 +122,9 @@ test -f "$TELOS_ARCHIVE"
 
 ### 安装插件
 
-尚未安装 DSH 时，从 [DSH 官方页面](https://www.deepseek.com/en/harness/) 获取兼容的 macOS 版本。若官网只提供其他版本，先核对兼容说明，不假设它与已验证版本行为一致。
+尚未安装 DSH 时，从 [DSH 官方页面](https://www.deepseek.com/en/harness/) 选择 **Download Desktop → macOS (Apple silicon)**，下载官方 DMG。打开后将 `DeepSeek Harness.app` 安装到用户选定的固定位置（通常是 `/Applications` 或 `~/Applications`），不要长期从挂载的 DMG 或临时目录运行。桌面版自带运行环境，不必先装 Node.js/npm。
+
+首次打开应用，由用户处理系统提示及登录，确认能进入主界面，并记录“关于”中的版本和实际 `.app` 路径；首次打开也让宿主建立自己的 desktop profile。官网链接指向最新版本，不保证永远是 0.2.1-rc.2；版本不同先核对兼容说明，不覆盖已有安装或假定完全兼容。系统阻拦时按 [macOS 排障](troubleshooting.md#macos-blocked) 处理。
 
 首选图形入口：打开 DSH → 插件 → 添加插件 → 选择已校验的 `.tgz` → 启用 Telos。
 
@@ -106,7 +146,7 @@ open "$TELOS_DSH_APP"
 
 ### 模型、微信与 Apple
 
-1. **选择模型。** 已有可用配置时选“跟随 DSH 默认模型”或已有 API 模型。没有配置时，通过 Telos 页的 DeepSeek 账号入口登录，或展开“添加其他 API 模型”，填写协议、地址和模型 ID。凭据由用户直接在界面中输入并“保存到 DSH”。
+1. **选择模型。** 已有可用配置时选“跟随 DSH 默认模型”或已有 API 模型。没有配置时，通过 Telos 页的 DeepSeek 账号入口登录，再刷新并选择可用的账号模型；登录成功不代表原先选中的 API 模型已改用账号。也可展开“添加其他 API 模型”，填写协议、地址和模型 ID。凭据由用户直接在界面中输入并“保存到 DSH”，需要 DeepSeek API Key 时见下方 [获取模型凭据](#model-key)。
 2. **测试连接。** 点击“测试连接”，成功后继续。该测试发送一条简短模型请求，会产生少量费用；不读取 Apple 数据。账号模型可用不代表 `DEEPSEEK_API_KEY` 或网页搜索后端也已就绪。
 3. **保存选项。** 默认助手即可。保留 Apple 开关开启；没有百度 Token 时关闭地图。点击“保存并应用”。Telos 现有程序默认两类工具均开启，因此应明确保存地图选择。
 4. **微信扫码。** 实例未运行时点击扫码登录，用户用自己的微信扫描页面二维码并确认。等待登录成功；二维码过期则重新发起。不要将二维码作为长期凭据保存。
@@ -120,7 +160,7 @@ open "$TELOS_DSH_APP"
 
 ### 准备 DSH
 
-复用已有兼容的官方 Node CLI。未安装时，先从 [Node.js 官网](https://nodejs.org/) 安装满足该 DSH 包 `engines` 要求的 Node.js，再检查并安装指定版本：
+仅在前面已选定 CLI 时执行。复用已有兼容的官方 Node CLI；未安装时，从 [Node.js 官网](https://nodejs.org/) 安装与宿主兼容的 Node.js。核对时的 [DSH 0.2.1-rc.2 源码声明](https://github.com/deepseek-ai/deepseek-harness/blob/master/package.json) 要求 `^22.19.0 || >=24.0.0`；新安装优先选择满足范围的受支持 LTS，后续版本重新核对。npm 发布包的 `engines` 可能为空，不能据此断言任意 Node 版本都可用。
 
 ```sh
 node --version
@@ -162,6 +202,9 @@ dsh --profile telos --telos-setup
 ### 配置模型与凭据
 
 同一 DSH_HOME/profile 已有可用模型时沿用原配置。全新 base profile 的默认模型是 `deepseek-official / deepseek-flash`，需要可用的 DeepSeek API 凭据；不要假设其他目录的桌面账号登录会自动共享。
+
+<a id="model-key"></a>
+需要新 Key 时，由用户打开 [DeepSeek 开放平台](https://platform.deepseek.com/)，在 API keys 页面创建并检查账户的 API 服务状态；官方步骤见 [首次 API 调用](https://api-docs.deepseek.com/)。网页聊天账号可用不等于 API 已有额度。已在 DSH 中使用可用账号模型或其他供应商时，继续复用，不强制再申请 DeepSeek API Key。
 
 凭据优先使用 DSH 原生管理方式。纯 CLI 用户也可**亲自在本机编辑** `$DSH_HOME/.env`，添加 `DEEPSEEK_API_KEY`。下面只打开文件，不读取或显示其内容：
 
@@ -211,7 +254,7 @@ dsh --profile telos --telos-status
 dsh --profile telos
 ```
 
-- `--telos-login` 在终端展示二维码。保持命令运行，由用户扫码确认，等待 `wechat_login: true`。AI 终端无法完整展示二维码时，让用户在本机终端执行这一步，不跳过登录。
+- `--telos-login` 在终端展示二维码。单独启动这一步并保持进程运行，由用户扫码确认，等待 `wechat_login: true`；不要放进会立刻超时或关闭的批量命令。AI 终端无法完整展示二维码时，让用户在本机终端执行这一步，不跳过登录。
 - `--telos-authorize` 打开 macOS 授权流程，用户允许“Telos Apple”的日历与提醒事项权限。
 - `--telos-status` 输出配置、登录、Apple、模型选择和语音状态。`configuration`、`wechat_login`、`wechat_enabled` 应为 `true`，Apple 两项应显示已授权。**它不会实际测试模型，也没有“通道健康”结论。**
 - 最后一个命令会持续运行，按 `Ctrl+C` 停止。看到进程存在还不算验收成功，继续下面的微信验证。
