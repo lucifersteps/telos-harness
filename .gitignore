@@ -13,3 +13,11 @@ reports/
 *.db
 .credentials*
 installed/
+
+# Local user state and build-only dependencies
+user.md
+users/
+wechat/
+media/
+.dsh/
+config.json

@@ -38,9 +38,9 @@ def test_pcm_conversion_and_cleanup(tmp_path,rate):
     assert not list(tmp_path.iterdir())
 
 def test_silk_conversion_uses_codec_only(tmp_path):
-    import pilk
+    from codec_fixture import encode_silk
     source=tmp_path/'sample.pcm';target=tmp_path/'sample.silk';source.write_bytes(b'\0\0'*16000)
-    pilk.encode(str(source),str(target),pcm_rate=16000,tencent=True)
+    encode_silk(source,target)
     assert_wav(asyncio.run(to_wav(target.read_bytes(),{},work_root=tmp_path/'work')))
     assert not list((tmp_path/'work').iterdir())
 

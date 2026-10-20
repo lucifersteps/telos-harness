@@ -48,7 +48,7 @@ DeepSeek Harness（下文简称 DSH）支持桌面版和 CLI，两种方式使�
 
 安装包自带 Telos 所需的 Python 运行环境和 Apple 组件，无需安装 Python、Homebrew 或 Xcode。选用 Node/CLI 时，仍需要 DSH 对应的 Node.js 运行环境。
 
-**当前版本：0.4.10 预览版。** 从 [0.4.10 Release](https://github.com/lucifersteps/telos-harness/releases/tag/v0.4.10) 下载安装包与 SHA256 校验文件。仓库目前仍为私有，下载需要获授权的 GitHub 账号；普通用户需等待仓库公开或由维护者提供安装包。不要把源码 ZIP 当作插件安装包。
+**当前版本：0.4.11 预览版。** 从 [0.4.11 Release](https://github.com/lucifersteps/telos-harness/releases/tag/v0.4.11) 下载安装包与 SHA256 校验文件。不要把源码 ZIP 当作插件安装包。
 
 当前预览包使用 ad-hoc 签名，尚未完成 Developer ID 公证及另一台实体 Mac 的首次安装验证；如遇系统拦截，见 [排障指南](docs/troubleshooting.md#macos-blocked)。
 
@@ -62,7 +62,7 @@ DeepSeek Harness（下文简称 DSH）支持桌面版和 CLI，两种方式使�
 
 **给安装 AI：** 下一步请阅读 [AI 安装指南](docs/install-for-ai.md)，根据实际宿主选择桌面或 CLI 路径；不要直接克隆源码后执行 `npm install` 来替代插件安装。
 
-只有聊天能力的 AI 也能按指南提供操作步骤，但不能代替你在电脑上执行。私有仓库需要访问权限；公开仓库后，普通用户才能直接通过链接读取文档和下载附件。
+只有聊天能力的 AI 也能按指南提供操作步骤，但不能代替你在电脑上执行。无需 GitHub 账号即可读取文档和下载公开的 Release 附件。
 
 ## 自己安装
 
@@ -125,5 +125,6 @@ CLI 与桌面使用同一个 `.tgz` 安装包。**CLI 必须保持运行**；关
 - [排障指南](docs/troubleshooting.md)：无法下载、模型错误、扫码、权限、网页和定时任务问题。
 - [详细配置与功能说明](packaging/README.md)：人设、语音、记忆、数据位置和业务确认。
 - [更新记录](CHANGELOG.md) · [开发与构建](docs/development/README.md) · [验证范围](docs/development/validation.md)。
+- [参与贡献](CONTRIBUTING.md) · [私密报告安全问题](SECURITY.md)。
 
-安装包不附带个人密钥、微信登录状态或私人聊天记录。Telos 的分发许可仍以仓库及安装包中的声明为准，公开访问本身不代表授予开源许可。
+安装包不附带个人密钥、微信登录状态或私人聊天记录。Telos 原创代码采用 [MIT 许可证](LICENSE)，第三方组件保留各自许可，详见 [第三方声明](THIRD_PARTY_NOTICES.md)。

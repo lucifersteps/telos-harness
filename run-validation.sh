@@ -20,4 +20,5 @@ case "$mode" in
   esac ;;
  *) echo '用法：bash run-validation.sh offline|live-native|live-channel|live-package' >&2; exit 2 ;;
 esac
+"$py" packaging/build_codec.py
 PYTHONPATH=.:checkout/src:tests "$py" -m pytest -q "$target" 2>&1 | tee "reports/$mode-$stamp.log"

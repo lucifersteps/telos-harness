@@ -1,1 +1,0 @@
-import{O as e,c as t,d as n}from"./runtime-core.esm-bundler-C7pIk7Cu.js";import{m as r}from"./index-DsQ2kdr5.js";var i={},a={class:`next-home-atmosphere`,"aria-hidden":`true`};function o(r,i){return e(),n(`div`,a,[...i[0]||=[t(`i`,null,null,-1),t(`i`,null,null,-1),t(`i`,null,null,-1),t(`span`,null,null,-1)]])}var s=r(i,[[`render`,o]]);export{s as t};

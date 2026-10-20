@@ -5,6 +5,7 @@ import io
 from pathlib import Path
 import resource
 import struct
+import subprocess
 import sys
 import tempfile
 import wave
@@ -50,8 +51,12 @@ def decode_silk(source,destination):
         frames+=1
         if frames>MAX_SECONDS*50:raise VoiceInputError('语音超过 120 秒。')
         offset+=size
-    import pilk
-    pilk.decode(str(source),str(destination),pcm_rate=16000)
+    root=Path(sys.executable).resolve().parent.parent if getattr(sys,'frozen',False) else Path(__file__).resolve().parents[4]/'build'
+    helper=root/'native/telos-silk'
+    if not helper.is_file():raise VoiceInputError('SILK 解码组件缺失，请重新安装插件。')
+    try:subprocess.run([str(helper),'decode',str(source),str(destination)],check=True,timeout=30,
+                       stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+    except (OSError,subprocess.SubprocessError) as error:raise VoiceInputError('这条语音未能解码，请重新发送或改用文字。') from error
 
 
 async def to_wav(data,metadata,*,work_root):

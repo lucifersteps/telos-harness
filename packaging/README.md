@@ -1,6 +1,6 @@
 # Telos Harness 插件（隔离预览版）
 
-0.4.10 适用于 macOS 14+ Apple Silicon、官方 Node/CLI 或官网桌面版 DeepSeek Harness 0.2.1-rc.2。安装包包含 Python 运行环境和编译后的 Apple helper，不需要用户安装 Python、Homebrew 或 Xcode。
+0.4.11 适用于 macOS 14+ Apple Silicon、官方 Node/CLI 或官网桌面版 DeepSeek Harness 0.2.1-rc.2。安装包包含 Python 运行环境和编译后的 Apple helper，不需要用户安装 Python、Homebrew 或 Xcode。
 
 首次使用请先阅读 [项目首页](https://github.com/lucifersteps/telos-harness#readme) 和 [AI 安装指南](https://github.com/lucifersteps/telos-harness/blob/main/docs/install-for-ai.md)，遇到问题查看 [排障指南](https://github.com/lucifersteps/telos-harness/blob/main/docs/troubleshooting.md)。本文保留详细配置与功能说明；安装旧版本时请阅读对应 tag 的文档。
 
@@ -20,7 +20,7 @@ Telos 只提供微信收发、Apple/百度地图工具、随包 Skill 内容、�
 
 ## 桌面版
 
-1. 在“插件 → 添加插件”安装 `telos-harness-0.4.10-macos-arm64.tgz` 并启用。
+1. 在“插件 → 添加插件”安装 `telos-harness-0.4.11-macos-arm64.tgz` 并启用。
 2. 在 Telos 页选择模型：跟随 DSH 默认模型、使用 DeepSeek 账号、选择已有 API 模型，或展开“添加其他 API 模型”。账号登录直接打开 DSH 原生入口；API 模型支持 OpenAI Chat Completions、Responses 与 Anthropic Messages 协议。
 3. 在页面输入模型 API Key 或百度 Token，点击“保存到 DSH”。凭据直接调用 DSH credentials 服务，不经过 Telos 后端、不进入 Telos 配置或聊天，也不回显已存密钥。添加的 API Provider 通过 DSH settings 持久化；微信独立模型选择不会改变宿主默认模型。无模型列表时保存 Key 后刷新目录，也可手动填写准确的模型 ID。
 4. 选择微信人设，保留 Apple 开启，百度地图按需开启，点击“保存并应用”。运行中应用配置会短暂重启 Telos，保留历史、待确认操作和防重复写入记录。
@@ -67,7 +67,7 @@ BAIDU_MAP_AUTH_TOKEN=填写自己的地图令牌
 安装包必须先下载并校验，下面 `/path/to/` 替换为实际绝对路径。安装并运行：
 
 ```sh
-dsh plugin --profile telos add telos-harness@file:/path/to/telos-harness-0.4.10-macos-arm64.tgz --offline
+dsh plugin --profile telos add telos-harness@file:/path/to/telos-harness-0.4.11-macos-arm64.tgz --offline
 dsh --profile telos --telos-setup
 dsh --profile telos --telos-login
 dsh --profile telos --telos-authorize

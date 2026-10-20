@@ -7,8 +7,8 @@
 <a id="download"></a>
 ## 仓库或 Release 打不开，找不到安装包
 
-- 私有仓库对未获授权的用户可能显示 404，不代表网络故障。使用获授权的 GitHub 账号，或请维护者提供包。
-- 本版安装包与校验文件位于 [0.4.10 Release](https://github.com/lucifersteps/telos-harness/releases/tag/v0.4.10)。有权限仍看不到附件时，核对版本和下载状态，联系维护者；不拼接猜测的下载链接。
+- 从仓库 Releases 页面进入当前版本；如果旧版本附件不可见，使用当前发布包。公开附件无需 GitHub 账号。
+- 本版安装包与校验文件位于 [0.4.11 Release](https://github.com/lucifersteps/telos-harness/releases/tag/v0.4.11)。仍看不到附件时，核对版本和下载状态，联系维护者；不拼接猜测的下载链接。
 - 下载的是 `.tgz` Release 附件；GitHub 自动提供的 Source code ZIP/tar.gz 不能当作自包含插件包安装。
 - SHA256 不匹配时停止安装并重新下载。缺少校验附件可核对 GitHub 资产 `digest` 或维护者提供的值；不要把自己刚算出的哈希作为期望值。
 

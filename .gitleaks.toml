@@ -1,0 +1,9 @@
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Literal resource_key example in the upstream Baidu Skill documentation"
+condition = "AND"
+paths = ['''(^|/)skills/baidu-ai-map/SKILL\.md$''']
+regexTarget = "line"
+regexes = ['''resource_key=abc123def456["]''']

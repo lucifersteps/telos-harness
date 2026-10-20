@@ -31,13 +31,13 @@ bash run-validation.sh
 构建需要 Xcode Command Line Tools 和上述 Python 依赖：
 
 ```sh
-.venv/bin/python packaging/build.py --version 0.4.10
+.venv/bin/python packaging/build.py --version 0.4.11
 ```
 
-Apple 权限授予独立的「Telos Apple」，桌面版和 CLI 使用同一路径。本版为 ad-hoc 签名：组件内容更新后可能需要重新授权，本机已验证这一限制。正式分发可通过构建参数 `--sign-identity "Developer ID Application: …"` 使用稳定签名；当前尚未完成 Developer ID 签名、公证及另一台实体 Mac 验证。第三方组件遵循各自许可；此私有仓库未授予 Telos 源码公开再分发许可。
+Apple 权限授予独立的「Telos Apple」，桌面版和 CLI 使用同一路径。本版为 ad-hoc 签名：组件内容更新后可能需要重新授权，本机已验证这一限制。正式分发可通过构建参数 `--sign-identity "Developer ID Application: …"` 使用稳定签名；当前尚未完成 Developer ID 签名、公证及另一台实体 Mac 验证。Telos 原创代码采用 MIT；第三方组件遵循各自许可，见根目录 LICENSE、THIRD_PARTY_NOTICES.md 与安装包 licenses/。
 
 ## 发布与文档同步
 
 发布新版本时，上传同一构建产生的 `.tgz` 和 `.tgz.sha256`，注明宿主版本、平台与签名状态；同步首页的开发版/发布版状态，以及 AI 安装指南中的版本。安装包内 README 来自 `packaging/README.md`。不要仅更新源码后就把开发包写成已发布版本。
 
-公开发布还需明确 Telos 的许可条款，并完成公开下载、另一台实体 Mac 的首次安装与授权验证；本次文档调整不改变仓库可见性或许可证。
+发布前检查 Git 历史和最终包中的凭据与个人数据，运行合并影响范围的回归，校验包内许可证、清单和 SHA256。另一台实体 Mac 的首次安装与授权尚未验证，发布说明必须保留这一限制。

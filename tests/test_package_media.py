@@ -75,7 +75,7 @@ async def test_installed_unprepared_voice_keeps_supplement_and_pending_preview(t
 @pytest.mark.skipif(not os.environ.get('TELOS_TEST_SPEECH_ROOT'),reason='需要准备好的 DSH 原生 SenseVoice 模型')
 @run_async
 async def test_installed_real_sensevoice_silk_preview_voice_not_confirmation_restart(tmp_path):
-    import pilk
+    from codec_fixture import encode_silk
     h=Installed(tmp_path,[call('voice-preview',draft()),'请确认。',call('renewed',draft()),'请使用文字确认。',call('after-silence',draft()),'语音为空，请使用文字确认。','已保存。','没有待确认操作。'])
     try:
         # The host, not the Telos bundle, enables its native speech provider.
@@ -90,7 +90,7 @@ async def test_installed_real_sensevoice_silk_preview_voice_not_confirmation_res
             wav=tmp_path/(name+'.wav');pcm=tmp_path/(name+'.pcm');silk=tmp_path/(name+'.silk')
             subprocess.run(['/usr/bin/say','-v','Tingting','-o',str(wav),'--file-format=WAVE','--data-format=LEI16@16000',phrase],check=True)
             with wave.open(str(wav)) as f:pcm.write_bytes(f.readframes(f.getnframes()))
-            pilk.encode(str(pcm),str(silk),pcm_rate=16000,tencent=True)
+            encode_silk(pcm,silk)
             return asset(h,silk.read_bytes(),3,name)
         request=spoken('请创建明天下午三点的测试会议。','request')
         confirm=spoken('确认。确认。','approval')

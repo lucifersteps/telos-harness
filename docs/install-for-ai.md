@@ -2,7 +2,7 @@
 
 本指南供能操作用户本机的 AI 执行，也可供用户手动操作。目标是完成微信聊天、默认启用的 Apple 日历与提醒事项配置，并留下可重复的启动方式。只有网页或聊天能力时，请给出对应步骤，由用户执行。
 
-适用版本：Telos **0.4.10**，已验证 DSH **0.2.1-rc.2**，macOS 14+ Apple Silicon。安装其他版本时，应阅读该 Release/tag 对应的文档，不要承诺旧包具有新功能。
+适用版本：Telos **0.4.11**，已验证 DSH **0.2.1-rc.2**，macOS 14+ Apple Silicon。安装其他版本时，应阅读该 Release/tag 对应的文档，不要承诺旧包具有新功能。
 
 ## 执行约定
 
@@ -45,22 +45,22 @@ command -v dsh
 
 安装来源：[Telos Releases](https://github.com/lucifersteps/telos-harness/releases)。普通使用者不需要克隆源码、安装 Python 或执行构建脚本。
 
-本指南对应 [0.4.10 Release](https://github.com/lucifersteps/telos-harness/releases/tag/v0.4.10)，附件包含安装包与 SHA256 校验文件。仓库目前仍为私有；无访问权限时，请用户使用获授权的 GitHub 账号，或由维护者提供安装包及校验值。若 Release 或匹配附件不可访问，明确报告原因，不要猜下载链接或自动降级。
+本指南对应 [0.4.11 Release](https://github.com/lucifersteps/telos-harness/releases/tag/v0.4.11)，附件包含安装包与 SHA256 校验文件。公开附件可直接通过浏览器下载，无需 GitHub 账号。下方 gh 命令供已配置 GitHub CLI 的环境使用；未配置时，从 Release 页面下载同名文件即可，不要为下载公开附件索要用户的令牌。若 Release 或匹配附件不可访问，明确报告原因，不要猜下载链接或自动降级。
 
 有 GitHub CLI 的环境可以先查询；没有 `gh` 时使用浏览器查看 Release 附件即可，不必为了安装 Telos 强制安装 `gh`。
 
 ```sh
 gh release list --repo lucifersteps/telos-harness --limit 10
-gh release view v0.4.10 --repo lucifersteps/telos-harness --json tagName,assets,url
+gh release view v0.4.11 --repo lucifersteps/telos-harness --json tagName,assets,url
 ```
 
 确认版本存在后，在新建的空下载目录执行：
 
 ```sh
-gh release download v0.4.10 --repo lucifersteps/telos-harness \
-  --pattern 'telos-harness-0.4.10-macos-arm64.tgz' \
-  --pattern 'telos-harness-0.4.10-macos-arm64.tgz.sha256'
-shasum -a 256 -c telos-harness-0.4.10-macos-arm64.tgz.sha256
+gh release download v0.4.11 --repo lucifersteps/telos-harness \
+  --pattern 'telos-harness-0.4.11-macos-arm64.tgz' \
+  --pattern 'telos-harness-0.4.11-macos-arm64.tgz.sha256'
+shasum -a 256 -c telos-harness-0.4.11-macos-arm64.tgz.sha256
 ```
 
 预期结果为文件名后显示 `OK`。失败则停止安装并重新下载。没有 `.sha256` 附件时，可计算 `shasum -a 256 安装包路径` 并与该 Release 附件的 GitHub `digest` 或维护者提供的 SHA256 比较；仅计算本地哈希不算完成校验。两者都没有时，先取得校验值。
@@ -68,14 +68,14 @@ shasum -a 256 -c telos-harness-0.4.10-macos-arm64.tgz.sha256
 检查包内元数据，核对版本、平台与宿主要求：
 
 ```sh
-tar -xOf telos-harness-0.4.10-macos-arm64.tgz package/package.json
-tar -xOf telos-harness-0.4.10-macos-arm64.tgz package/component-manifest.json
+tar -xOf telos-harness-0.4.11-macos-arm64.tgz package/package.json
+tar -xOf telos-harness-0.4.11-macos-arm64.tgz package/component-manifest.json
 ```
 
 应是 `telos-harness`、目标版本、`darwin` / `arm64`，manifest 的 `min_macos` 为 `14`、`harness` 为 `0.2.1rc2`。安装变量使用下载文件的**绝对路径**，不要把示例路径原样执行：
 
 ```sh
-TELOS_ARCHIVE="/absolute/path/telos-harness-0.4.10-macos-arm64.tgz"
+TELOS_ARCHIVE="/absolute/path/telos-harness-0.4.11-macos-arm64.tgz"
 test -f "$TELOS_ARCHIVE"
 ```
 

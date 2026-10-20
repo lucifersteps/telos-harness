@@ -22,7 +22,6 @@ iniconfig==2.3.0
 macholib==1.16.4
 multidict==7.1.0
 packaging==26.2
-pilk==0.2.4
 pluggy==1.6.0
 propcache==0.5.4
 pycparser==3.0

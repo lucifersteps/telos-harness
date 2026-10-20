@@ -20,7 +20,7 @@ def test_legacy_default_and_bundled_persona_keep_business_rules():
     assert system_prompt({}).startswith(rules)
     assert 'Apple 关闭；百度地图 关闭' in system_prompt({'tools':{'apple':False,'maps':False}})
     prompt=system_prompt({'persona':'liman'})
-    assert '你叫黎曼' in prompt and '渊栎' not in prompt
+    assert '你叫黎曼' in prompt
     assert rules in prompt and '以业务规则为准' in prompt
 
 

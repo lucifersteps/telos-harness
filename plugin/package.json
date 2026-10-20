@@ -20,5 +20,6 @@
     "./maps": "./maps.mjs",
     "./bootstrap": "./bootstrap.mjs",
     "./client": "./client.js"
-  }
+  },
+  "license": "MIT"
 }
