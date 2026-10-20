@@ -52,6 +52,8 @@ DeepSeek Harness（下文简称 DSH）支持桌面版和 CLI，两种方式使�
 
 当前预览包使用 ad-hoc 签名，尚未完成 Developer ID 公证及另一台实体 Mac 的首次安装验证；如遇系统拦截，见 [排障指南](docs/troubleshooting.md#macos-blocked)。
 
+**插件市场安装来源：** 使用 [0.4.11 预构建安装包](https://github.com/lucifersteps/telos-harness/releases/download/v0.4.11/telos-harness-0.4.11-macos-arm64.tgz)，并核对同一 Release 的 SHA256 文件。仓库根目录的 `package.json` 声明正式插件元数据；源码不包含已编译的 Python 和 Apple 组件，不能直接用 `github:lucifersteps/telos-harness` 代替安装包。市场安装完成后，仍需完成模型配置、微信扫码和 Apple 授权。
+
 ## 让 AI 帮你安装
 
 最简方式：把 **“帮我安装 Telos” + 本仓库链接** 交给能够操作这台 Mac 的 AI。只发链接时，有些 AI 只会介绍项目；只有云端沙箱或聊天能力的 AI 也无法直接安装到你的电脑。
@@ -130,5 +132,9 @@ CLI 与桌面使用同一个 `.tgz` 安装包。**CLI 必须保持运行**；关
 - [详细配置与功能说明](packaging/README.md)：人设、语音、记忆、数据位置和业务确认。
 - [更新记录](CHANGELOG.md) · [开发与构建](docs/development/README.md) · [验证范围](docs/development/validation.md)。
 - [参与贡献](CONTRIBUTING.md) · [私密报告安全问题](SECURITY.md)。
+
+## 联系作者
+
+对 Telos 感兴趣，或想交流使用体验、功能建议，欢迎添加作者微信：**`lylsysu`**（请备注「Telos」）。
 
 安装包不附带个人密钥、微信登录状态或私人聊天记录。Telos 原创代码采用 [MIT 许可证](LICENSE)，第三方组件保留各自许可，详见 [第三方声明](THIRD_PARTY_NOTICES.md)。

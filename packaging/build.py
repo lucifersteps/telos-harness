@@ -31,8 +31,11 @@ def main():
     shutil.copytree(ROOT/'plugin',package)
     shutil.copytree(ROOT/'skills',package/'skills')
     shutil.copytree(ROOT/'personas',package/'personas')
-    metadata=json.loads((package/'package.json').read_text());metadata.update(name='telos-harness',version=args.version,os=['darwin'],cpu=['arm64'])
-    metadata['exports']['.']='./bootstrap.mjs';metadata['exports']['./channel']='./index.mjs'
+    # Public metadata lives at the repository root; plugin/package.json is a test fixture.
+    # Source modules live in plugin/, while release modules live at the archive root.
+    metadata=json.loads((ROOT/'package.json').read_text());metadata['version']=args.version
+    metadata['main']=metadata['main'].replace('./plugin/','./',1)
+    metadata['exports']={key:value.replace('./plugin/','./',1) for key,value in metadata['exports'].items()}
     (package/'package.json').write_text(json.dumps(metadata,indent=2)+'\n')
     shutil.copy2(ROOT/'LICENSE',package/'LICENSE')
     shutil.copy2(ROOT/'THIRD_PARTY_NOTICES.md',package/'THIRD_PARTY_NOTICES.md')

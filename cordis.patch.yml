@@ -1,0 +1,4 @@
+# Source manifest. Install the prebuilt Release archive; see docs/install-for-ai.md.
+- insert:
+    - id: telos-bootstrap
+      name: telos-harness

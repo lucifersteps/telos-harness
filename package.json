@@ -1,0 +1,47 @@
+{
+  "name": "telos-harness",
+  "version": "0.4.11",
+  "description": "WeChat personal assistant for DeepSeek Harness, with Apple Calendar and Reminders integration on Apple Silicon Macs.",
+  "license": "MIT",
+  "author": "lucifersteps",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lucifersteps/telos-harness.git"
+  },
+  "homepage": "https://github.com/lucifersteps/telos-harness#readme",
+  "bugs": {
+    "url": "https://github.com/lucifersteps/telos-harness/issues"
+  },
+  "keywords": [
+    "dsh-plugin",
+    "deepseek-harness",
+    "wechat",
+    "gtd",
+    "apple-calendar",
+    "apple-reminders"
+  ],
+  "type": "module",
+  "main": "./plugin/bootstrap.mjs",
+  "exports": {
+    ".": "./plugin/bootstrap.mjs",
+    "./channel": "./plugin/index.mjs",
+    "./apple": "./plugin/apple.mjs",
+    "./maps": "./plugin/maps.mjs",
+    "./bootstrap": "./plugin/bootstrap.mjs",
+    "./client": "./plugin/client.js"
+  },
+  "os": ["darwin"],
+  "cpu": ["arm64"],
+  "engines": {
+    "dsh": "0.2.1-rc.2"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": ["@deepseek-ai/dsh-client-ui-plugin-manager"]
+    }
+  }
+}
