@@ -16,16 +16,18 @@ from business import Business
 from personas import system_prompt
 from settings import read_config
 from telos.agent.tools.types import ToolInputError
+from scheduled_delivery import ScheduledDelivery
 
 ROOT=Path(__file__).resolve().parent
 
 
-class Channel:
+class Channel(ScheduledDelivery):
     def __init__(self,root,apple,adapter,*,harness_home=None,token=None,timeout=180,event_sink=None):
         self.root=Path(root);self.root.mkdir(parents=True,exist_ok=True)
         self.prompt=system_prompt(read_config(self.root))
         self.business=Business(self.root,apple,read_config(self.root));self.adapter=adapter
         self.delivery_locks={};self.loop=asyncio.get_running_loop();self.refs={};self.event_sink=event_sink
+        self.init_scheduled_delivery()
         self.ready=self.loop.create_future();self.timeout=timeout
         self.harness_home=Path(harness_home) if harness_home else self.root/'harness'
         self.token=token or secrets.token_hex(24);owner=self
@@ -50,10 +52,19 @@ class Channel:
     async def route(self,path,data):
         if path=='/ready':
             if not self.ready.done():self.ready.set_result(data['url'])
+            self.start_schedule_sender()
             return {}
-        if path=='/boot':return {'tools':self.business.schemas(data.get('family')),'prompt':self.prompt}
+        if path=='/boot':return {'tools':self.business.schemas(data.get('family')),'prompt':self.prompt,
+            'scheduleNamespace':'telos_schedule_'+hashlib.sha256(str(self.root.resolve()).encode()).hexdigest()[:16]}
+        if path=='/sessions':
+            sessions=[]
+            for session in self.refs:
+                try:self.known_ref(session);sessions.append(session)
+                except ValueError:pass
+            return {'sessions':sessions}
+        if path=='/scheduled-output':return await self.stage_scheduled(data)
         if path=='/memory-profile':
-            ref=self.refs[data['session']]
+            ref=self.known_ref(data['session'])
             if not ref.user_id:raise ValueError('User identity is required for personal memory')
             identity=json.dumps([ref.platform,ref.tenant_id,ref.user_id],ensure_ascii=False,separators=(',',':'))
             key=hashlib.sha256(identity.encode()).hexdigest()
@@ -67,6 +78,13 @@ class Channel:
     async def prepare(self,session,messages):
         # Runs only at Harness's native pre-step boundary, after any in-flight tool finishes.
         for message in messages:
+            if message.get('scheduled'):
+                # A timer is never a human approval, even if its prompt says '1'.
+                self.known_ref(session)
+                with self.business.db() as db:
+                    db.execute("INSERT OR IGNORE INTO messages(id,session,input,reply,delivered) VALUES(?,?,?,'',1)",(message['id'],session,message.get('text','')))
+                self.business.active[session]={'key':message['id'],'text':message.get('text',''),'time':datetime.now().astimezone().isoformat()}
+                continue
             with self.business.db() as db:row=db.execute('SELECT input FROM messages WHERE id=? AND session=?',(message['id'],session)).fetchone()
             if row is None:continue  # Native Skill catalogs and other internal contexts are not user approvals.
             key=message['id'];text=row[0]
@@ -87,7 +105,7 @@ class Channel:
         return {}
 
     async def handle(self,session,key,text,ref,*,blocks=None,accepted=False):
-        self.refs[session]=ref
+        self.bind_ref(session,ref)
         if not accepted and not self.business.accept(session,key,text):return
         events=[];keys=[key]
         try:
@@ -129,19 +147,20 @@ class Channel:
             await self.business.deliver(session,target,self.adapter,self.refs[session])
 
     async def recover(self,session,ref):
-        self.refs[session]=ref
+        self.bind_ref(session,ref)
         pending=self.business.pending(session)
         if pending and pending.get('executing'):
             receipt=await self.business.reconcile(session,pending)
             key=pending.get('confirmation_key')
             if key:
                 with self.business.db() as db:db.execute('UPDATE messages SET reply=?,delivered=0 WHERE id=? AND session=?',(receipt['text'],key,session))
-        with self.business.db() as db:rows=db.execute('SELECT id,reply FROM messages WHERE session=? AND delivered=0 ORDER BY rowid',(session,)).fetchall()
+        with self.business.db() as db:rows=db.execute('SELECT id,reply FROM messages WHERE session=? AND delivered=0 AND id NOT IN (SELECT key FROM schedule_outbox) ORDER BY rowid',(session,)).fetchall()
         for key,reply in rows:
             if reply is None:self.business.save_reply(key,'')
             await self.business.deliver(session,key,self.adapter,ref)
         # Harness restores its own history/status. Python never rebuilds model messages.
 
     async def close(self):
+        await self.stop_schedule_sender()
         await asyncio.to_thread(self.server.shutdown)
         self.server.server_close()

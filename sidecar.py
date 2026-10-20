@@ -57,6 +57,13 @@ class WeChatChannel(Channel):
         if row:adapter.set_sync_buf(row[0])
         self.inflight=set()
 
+    def known_ref(self,session):
+        ref=super().known_ref(session)
+        config=self.adapter.config
+        if ref.tenant_id!=config.account_id or ref.user_id not in config.allowed_users:
+            raise ValueError('WeChat account or allowed recipient changed')
+        return ref
+
     async def consume(self,turn,raw,session,key):
         try:
             media_root=self.root/'media';media_root.mkdir(exist_ok=True,mode=0o700)
@@ -94,7 +101,10 @@ class WeChatChannel(Channel):
     async def poll(self):
         await self.ready
         with self.business.db() as db:refs=db.execute('SELECT session,value FROM channel_refs').fetchall()
-        for session,value in refs:await self.recover(session,ConversationRef(**json.loads(value)))
+        for session,value in refs:
+            try:self.known_ref(session)
+            except ValueError:continue
+            await self.recover(session,ConversationRef(**json.loads(value)))
         while True:
             result=await self.adapter.poll_once()
             if not result.ok:

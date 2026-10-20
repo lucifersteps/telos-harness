@@ -2,14 +2,14 @@
 
 为 DeepSeek Harness 提供微信收发、Apple 日历与提醒事项、百度地图及 Skill 的插件。Harness 管理循环、历史、上下文压缩和任务清单；Telos 管理业务工具、用户确认及防重复写入。
 
-当前开发版本 **0.4.7（预览版）**，支持 macOS 14+ Apple Silicon。兼容官方 Node/CLI 和官网桌面版 DSH `0.2.1-rc.2`，两种入口使用同一个插件包、业务工具与确认账本。插件只安装 Telos 入口；DSH 统一提供模型、凭据、Skill、历史和可选语音。CLI 改用包含 dsh-base 的独立 profile。验证范围见 [验证记录](docs/development/validation.md)。
+当前开发版本 **0.4.10（预览版）**，支持 macOS 14+ Apple Silicon。兼容官方 Node/CLI 和官网桌面版 DSH `0.2.1-rc.2`，两种入口使用同一个插件包、业务工具与确认账本。插件只安装 Telos 入口；DSH 统一提供模型、凭据、Skill、历史和可选语音。CLI 改用包含 dsh-base 的独立 profile。验证范围见 [验证记录](docs/development/validation.md)。
 
 ## 安装
 
-构建后取得 `dist/telos-harness-0.4.7-macos-arm64.tgz` 和校验文件（本次开发包尚未发布到 GitHub），在包所在目录执行：
+构建后取得 `dist/telos-harness-0.4.10-macos-arm64.tgz` 和校验文件（本次开发包尚未发布到 GitHub），在包所在目录执行：
 
 ```sh
-shasum -a 256 -c telos-harness-0.4.7-macos-arm64.tgz.sha256
+shasum -a 256 -c telos-harness-0.4.10-macos-arm64.tgz.sha256
 ```
 
 随后按 [安装和首次配置说明](packaging/README.md) 安装。安装包包含 Python 运行环境与 Apple helper，使用者无需安装 Python、Homebrew 或 Xcode。仍需配置自己的模型凭据、扫码连接微信、授予 Apple 权限；地图功能需要百度 Token。语音由 DSH 配置和准备，Telos 不下载模型。
@@ -19,6 +19,8 @@ shasum -a 256 -c telos-harness-0.4.7-macos-arm64.tgz.sha256
 微信会话只注入当前待确认内容、保存回执和消息时间；Apple 数据由现有 query/detail 工具按需读取。同一消息的未变化上下文由 DSH 原生机制去重。桌面宿主将压缩组件交给 Agent 预设，Telos 直接创建的微信会话会在独立作用域挂载 DSH 原生压缩与工具结果修剪组件；CLI 已有压缩服务时沿用宿主配置。
 
 通道不生成固定“暂停/中断/已结束”回复，只发送实际模型回答和业务回执。CLI 更新归档后须重启 DSH，使业务进程和已加载模块采用新版本。
+
+微信支持 DSH 原生定时任务：可以要求“十分钟后提醒我”或“每天 9 点汇总待办”，并查询、修改、取消当前微信会话的任务。桌面和 CLI 都需保持 DSH 与 Telos 运行；停止期间不会触发，重新启动后由原生调度处理到期任务。定时回复通过独立的持久化发件箱送回原微信会话。微信任务与桌面普通会话任务分开管理，不出现在桌面任务列表中；不需要额外的调度 API。
 
 ## 开发与验证
 
@@ -49,7 +51,7 @@ bash run-validation.sh
 构建需要 Xcode Command Line Tools 和上述 Python 依赖：
 
 ```sh
-.venv/bin/python packaging/build.py --version 0.4.7
+.venv/bin/python packaging/build.py --version 0.4.10
 ```
 
 Apple 权限授予独立的「Telos Apple」，桌面版和 CLI 使用同一路径。本版为 ad-hoc 签名：组件内容更新后可能需要重新授权，本机已验证这一限制。正式分发可通过构建参数 `--sign-identity "Developer ID Application: …"` 使用稳定签名；当前尚未完成 Developer ID 签名、公证及另一台实体 Mac 验证。第三方组件遵循各自许可；此私有仓库未授予 Telos 源码公开再分发许可。

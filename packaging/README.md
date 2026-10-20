@@ -1,18 +1,22 @@
 # Telos Harness 插件（隔离预览版）
 
-0.4.7 适用于 macOS 14+ Apple Silicon、官方 Node/CLI 或官网桌面版 DeepSeek Harness 0.2.1-rc.2。安装包包含 Python 运行环境和编译后的 Apple helper，不需要用户安装 Python、Homebrew 或 Xcode。
+0.4.10 适用于 macOS 14+ Apple Silicon、官方 Node/CLI 或官网桌面版 DeepSeek Harness 0.2.1-rc.2。安装包包含 Python 运行环境和编译后的 Apple helper，不需要用户安装 Python、Homebrew 或 Xcode。
 
 ## 职责与依赖
 
 Telos 只提供微信收发、Apple/百度地图工具、随包 Skill 内容、确认和防重复写入。DSH 提供循环、历史、模型连接、凭据、Skill 服务、任务清单和可选语音服务。插件只安装一个 Telos 入口，不修改宿主的全局模型、提示词、工具开关或语音选择。
 
-微信会话通过 DSH 原生 setup 使用 Skill 加载器、Skill 工具和 todo 工具；宿主未提供全局压缩服务时，在微信独立作用域挂载原生 compaction-basic 和工具结果修剪组件，沿用默认压缩阈值和超限恢复；这是该会话的原生能力配置，不另建 Skill 注册中心。提示词、业务工具和确认上下文只属于 Telos 创建的会话。微信新消息通过原生 steer 输入。
+微信会话通过 DSH 原生 setup 使用 Skill 加载器、Skill 工具、todo 工具及原生 web_search/web_fetch 工具；宿主未提供全局压缩服务时，在微信独立作用域挂载原生 compaction-basic 和工具结果修剪组件，沿用默认压缩阈值和超限恢复；这是该会话的原生能力配置，不另建 Skill 注册中心。提示词、业务工具和确认上下文只属于 Telos 创建的会话。微信新消息通过原生 steer 输入。
+
+网页搜索与读取复用 DSH 的 web 服务、搜索供应商及凭据，Telos 不保存额外的搜索密钥。搜索后端不可用时由 DSH 返回原生工具错误；聊天模型可用不代表搜索后端已配置。
+
+微信历史回查复用 DSH 原生 SQLite 全文索引及事件读取，只开放 session_event_search 和 session_event_read。执行层固定当前微信会话，拒绝跨会话目标；支持压缩前消息及相邻事件。索引在 Telos 独立作用域按需建立于内存，重启后从 DSH 原生日志重建，不另存聊天副本，也不改变宿主搜索设置。查询为字面全文匹配，建议使用短关键词；before/after 是原始事件数量，每侧最多 10 个。
 
 宿主必须包含 `@deepseek-ai/dsh-base` 的标准服务；旧 `sdk-minimal` 不再支持直接运行此版本。缺少必要服务时 Telos 会明确报错，不自动补装。不启用语音也可以使用文字和图片。
 
 ## 桌面版
 
-1. 在“插件 → 添加插件”安装 `telos-harness-0.4.7-macos-arm64.tgz` 并启用。
+1. 在“插件 → 添加插件”安装 `telos-harness-0.4.10-macos-arm64.tgz` 并启用。
 2. 在 Telos 页选择模型：跟随 DSH 默认模型、使用 DeepSeek 账号、选择已有 API 模型，或展开“添加其他 API 模型”。账号登录直接打开 DSH 原生入口；API 模型支持 OpenAI Chat Completions、Responses 与 Anthropic Messages 协议。
 3. 在页面输入模型 API Key 或百度 Token，点击“保存到 DSH”。凭据直接调用 DSH credentials 服务，不经过 Telos 后端、不进入 Telos 配置或聊天，也不回显已存密钥。添加的 API Provider 通过 DSH settings 持久化；微信独立模型选择不会改变宿主默认模型。无模型列表时保存 Key 后刷新目录，也可手动填写准确的模型 ID。
 4. 选择微信人设，按需开启 Apple 和百度地图，点击“保存并应用”。运行中应用配置会短暂重启 Telos，保留历史、待确认操作和防重复写入记录。
@@ -57,7 +61,7 @@ BAIDU_MAP_AUTH_TOKEN=填写自己的地图令牌
 安装并运行：
 
 ```sh
-dsh plugin --profile telos add telos-harness@file:/path/to/telos-harness-0.4.7-macos-arm64.tgz --offline
+dsh plugin --profile telos add telos-harness@file:/path/to/telos-harness-0.4.10-macos-arm64.tgz --offline
 dsh --profile telos --telos-setup
 dsh --profile telos --telos-login
 dsh --profile telos --telos-authorize
@@ -125,6 +129,16 @@ dsh --profile telos --telos-persona-file "/absolute/path/my-persona.md"
 Apple 写入仍须用户文字确认、预览送达与版本校验，并保留防重复写入账本。图片交给 DSH 原生附件和模型视觉能力；语音经 Telos 下载、解密并转为 WAV 后调用 DSH 已配置的识别服务。识别失败不猜测音频内容，语音不能代替文字确认。Telos 临时媒体处理后删除，进入 DSH 的图片保留遵循其原生规则。
 
 安装包包含可选的通用黎曼人设，不含个人密钥、微信状态、个人资料或历史。当前为 ad-hoc 签名，尚未做 Developer ID 公证或另一台实体 Mac 验证。现有微信机器人不会自动切换。
+
+## 微信定时任务
+
+使用 `schedule_create`、`schedule_list`、`schedule_update`、`schedule_delete` 管理当前微信会话的任务。支持延迟、指定时间、固定间隔、每日、每周和 cron；日历规则使用明确时区。任务触发后仍通过原来的模型和 Telos 工具执行，并将回复送回原微信会话。创建 Apple 日历/提醒事项仍需原有人工确认，定时消息不能代替确认。
+
+插件在两种宿主上均挂载独立的 DSH 原生调度服务，沿用原生规则、存储 schema、持久化和到期投递。只为微信会话提供恢复适配；已保存的账号或允许接收人变化时，拒绝恢复或向旧接收人发送。无需额外安装 Web 服务，也无需调度 API Key。原生存储域为 `telos_schedule_<业务目录哈希>`，存于 DSH 的 storage backend；业务目录和 DSH_HOME 应保持稳定。微信任务通过聊天管理，与桌面普通会话任务列表隔离。
+
+DSH 和 Telos 必须保持运行。停止或禁用 Telos 会停止它的调度实例；重新启动后由原生引擎处理逾期任务。任务数据不因停止而删除。切换数据目录不会自动迁移任务，插件不安装系统常驻服务。
+
+已完成的定时回复先保存到业务数据库，再逐段发送。已获成功回执的分段不会在普通重试中重复发送；失败后只重试发送，不重跑模型。重启时会读取原生会话日志，补齐尚未交给发件箱的已完成输出。远端已收取但本地未收到回执的网络中断窗口仍无法保证严格只送达一次。
 
 ## 用户记忆
 

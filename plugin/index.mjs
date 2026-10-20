@@ -7,16 +7,42 @@ import {post} from './bridge.mjs';
 import * as SkillFilesystem from '@deepseek-ai/dsh-skill-filesystem';
 import * as SkillTool from '@deepseek-ai/dsh-tool-skill';
 import * as TodoTool from '@deepseek-ai/dsh-tool-todo';
+import * as WebTool from '@deepseek-ai/dsh-tool-web';
+import SqliteSessionQuery from '@deepseek-ai/dsh-session-query-sqlite';
+import {mountHistoryTools} from './history.mjs';
+import {createScheduler,mountScheduleTools,scheduleDelivery,conversationTurns} from './schedule.mjs';
 import BasicCompaction from '@deepseek-ai/dsh-compaction-basic';
 import ToolResultPruner from '@deepseek-ai/dsh-compaction-tool-result-pruner';
 import * as Apple from './apple.mjs';
 import * as Maps from './maps.mjs';
 import {mountUserMemory} from './memory.mjs';
 export const name='telos-wechat';
-export const inject=['agents','systemPrompt','attachments','agentDefaultModel','telosBusiness','workingDirectory','tools'];
+export const inject=['agents','sessions','sessionQuery','sessionPersistence','storageDomain','systemPrompt','attachments','agentDefaultModel','telosBusiness','workingDirectory','tools'];
 export async function apply(ctx) {
   const service=ctx.telosBusiness;
-  const {prompt}=await post(service,'/boot',{});
+  const {prompt,scheduleNamespace}=await post(service,'/boot',{});
+  const delivery=scheduleDelivery(ctx,service);
+  const scheduler=createScheduler(ctx,service,scheduleNamespace,open);
+  const managed=new Set(),turnEvents=new Map(),waiting=new Map();
+  ctx.on('session/event',(session,event)=>{
+    if(!managed.has(session))return;
+    if(event.type==='turn/start')turnEvents.set(session,[]);
+    const current=turnEvents.get(session);
+    if(!current)return;
+    current.push(event);
+    if(event.type==='turn/end'){
+      turnEvents.delete(session);
+      const turn=conversationTurns(current)[0];
+      for(const key of turn?.users??[]){
+        const request=waiting.get(session.id+'\0'+key);if(request)request.turn=turn;
+      }
+      void ctx.sessions.flush(session).then(()=>delivery.enqueue(session.id,current))
+        .catch(error=>console.error('Telos scheduled output flush: '+error.message));
+    }
+  });
+  // Telos owns only this lazy, disposable index; host search settings stay intact.
+  const history=ctx.isolate('sessionQuery');
+  await history.plugin(SqliteSessionQuery,{path:':memory:',openAt:'first-search',readWindowMax:10});
   async function setup(scope,agent,memoryDirectory) {
     let businessContext;
     // Desktop moves compaction out of dsh-base into UI presets. WeChat creates
@@ -31,10 +57,14 @@ export async function apply(ctx) {
     // Native resume runs the same setup, without rewriting history or business state.
     scope.systemPrompt.section({name:'telos:rules',order:0,text:prompt,complete:true,interpolate:false});
     await mountUserMemory(scope,agent,memoryDirectory);
+    mountHistoryTools(scope,agent,history.get('sessionQuery'));
     {
       await scope.plugin(SkillFilesystem,{customSkillDirs:service.tools?.maps===false?[]:[service.skillsDir],includeDefaultRoots:true,watch:false});
       await scope.plugin(SkillTool);
       await scope.plugin(TodoTool,{allowParallelInProgress:false});
+      await mountScheduleTools(scope,scheduler.scope);
+      // Register locally in both hosts; inherited tools remain restricted below.
+      await scope.plugin(WebTool,{search:true,fetch:true,searchTimeoutMs:60000});
       await scope.plugin(Apple);
       if(service.tools?.maps!==false)await scope.plugin(Maps);
     }
@@ -42,7 +72,8 @@ export async function apply(ctx) {
     agent.ctx.on('agent/pre-step',async ({step,messages,signal},next)=>{
       if(step>service.maxSteps)throw new Error('本轮已达到步骤限额，保留会话等待继续。');
       if(messages.length)await post(service,'/prepare',{session:agent.session.id,
-        messages:messages.map(m=>({id:m.id,hasMedia:m.content.some(b=>b.type!=='text')}))},signal);
+        messages:messages.map(m=>({id:m.id,hasMedia:m.content.some(b=>b.type!=='text'),
+          scheduled:m.source?.kind==='schedule',text:m.source?.kind==='schedule'?m.content.filter(b=>b.type==='text').map(b=>b.text).join(''):undefined}))},signal);
       // DSH assembles sections BEFORE pre-step, but projects their context in next().
       // Fill the same section after confirmation so this request sees its receipt.
       const state=await post(service,'/context',{session:agent.session.id},signal);
@@ -54,6 +85,7 @@ export async function apply(ctx) {
       assembly.contexts.push(businessContext);
       return next();
     });
+    managed.add(agent.session);scope.effect(()=>()=>{managed.delete(agent.session);turnEvents.delete(agent.session);});
   }
   // A cache of native handles, including in-flight creation; never an input queue.
   const sessions=new Map();
@@ -72,7 +104,10 @@ export async function apply(ctx) {
   ctx.effect(()=>async()=>{
     for(const {task} of sessions.values()){try {await (await task).dispose();} catch {}}
     sessions.clear();
+    await delivery.drain();
   });
+  await delivery.replay();
+  await scheduler.start();
   const server=createServer(async(req,res)=>{
     if(req.headers.authorization!=='Bearer '+service.token){res.writeHead(403);res.end();return;}
     try {
@@ -96,17 +131,20 @@ export async function apply(ctx) {
         let index=0;content=content.map(b=>b.type==='image'&&b.data?{type:'image',attachment:refs[index++]}:b);
       }
       const events=[];
+      const request={};const requestKey=data.session+'\0'+data.key;waiting.set(requestKey,request);
       const dispose=ctx.on('session/event',(session,event)=>{if(session===agent.session)events.push(event);});
       try {
         agent.steer({...createUserMessage({content,source:{kind:'user'}}),id:data.key});
         await agent.whenIdle();
         await ctx.parallel(agent.session,'session/flush',agent.session);
-        const last=events.findLast(e=>e.type==='assistant/message');
-        const final=last?.data.message.content.filter(b=>b.type==='text').map(b=>b.text).join('')||'';
-        const finish=events.findLast(e=>e.type==='turn/end')?.data;
+        // whenIdle may include a queued scheduled turn. Return only the turn
+        // which actually consumed this request; background output has its own outbox.
+        const turn=request.turn;
+        const final=turn?.text||'';
+        const finish=turn?.finish;
         res.writeHead(200,{'Content-Type':'application/json'});
-        res.end(JSON.stringify({events,text:final,finish,keys:[data.key,...events.filter(e=>e.type==='user/message').map(e=>e.data.id)]}));
-      } finally {dispose();}
+        res.end(JSON.stringify({events,text:final,finish,keys:turn?.users??[data.key]}));
+      } finally {dispose();waiting.delete(requestKey);}
     } catch(error){console.error('Telos channel: '+error.message);res.writeHead(500,{'Content-Type':'application/json'});res.end(JSON.stringify({error:String(error)}));}
   });
   await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));

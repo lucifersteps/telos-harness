@@ -92,7 +92,7 @@ class Business:
         return [{'name':t.name,'description':t.description,'parameters':t.parameters} for t in self.tools.values() if t.name in selected]
 
     async def request_question(self,request):
-        self.set_pending(request.session_id,{'kind':'question','question':request.question})
+        self.set_pending(request.session_id,{'kind':'question','question':request.question,'origin':self.active[request.session_id]['key']})
         return QuestionResponse(decision='awaiting_input')
 
     async def context(self,session):

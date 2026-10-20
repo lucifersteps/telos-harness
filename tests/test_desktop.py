@@ -34,7 +34,7 @@ export function apply(ctx){ctx.connection.fetch.register({path:'/api/test/plugin
 const {action}=await req.json();
 if(action==='independent'){
  const handle=await ctx.agents.create({sessionId:'independent-host-check',agentOptions:ctx.agentDefaultModel.currentSelection()});
- try {handle.agent.steer(createUserMessage({content:[{type:'text',text:'这是宿主独立会话测试，仅回复收到。'}],source:{kind:'user'}}));await handle.agent.whenIdle();return Response.json({model:ctx.agentDefaultModel.currentSelection(),businessTool:!!ctx.tools.get('personalPlan',handle.agent)});}
+ try {handle.agent.steer(createUserMessage({content:[{type:'text',text:'这是宿主独立会话测试，仅回复收到。'}],source:{kind:'user'}}));await handle.agent.whenIdle();return Response.json({model:ctx.agentDefaultModel.currentSelection(),businessTool:!!ctx.tools.get('personalPlan',handle.agent),historySearchMode:ctx.get('sessionQuery')?.config.openAt,scheduleCount:(await ctx.get('schedule').catalog()).length});}
  finally {await handle.dispose();}
 }
 const result=action==='remove'?await ctx.pluginManager.removeBundle('telos-harness'):await ctx.pluginManager.setBundleEnabled('telos-harness',action==='enable');
@@ -139,7 +139,7 @@ async def test_desktop_first_setup_auth_login_repair_restart_and_confirm(tmp_pat
             reply=db.execute('SELECT reply FROM messages ORDER BY rowid DESC LIMIT 1').fetchone()[0]
             assert reply==pending['text']
         assert list((d.home/'sessions').glob('*/*/session.v*.jsonl.zstd'))
-        assert {x['name'] for x in d.model.requests[0]['tools']}=={'personalPlan','ask_user','baidu_maps','todo_write','skill','user_memory'}
+        assert {x['name'] for x in d.model.requests[0]['tools']}=={'personalPlan','ask_user','baidu_maps','todo_write','skill','user_memory','web_search','web_fetch','session_event_search','session_event_read','schedule_create','schedule_list','schedule_update','schedule_delete'}
         d.stop();await d.start();await d.wait(lambda:d.get()['running'])
         d.services.push('confirm','1');await d.wait(lambda:len(d.services.apple.writes)==1 and len(d.services.sent)>1)
         assert '你叫黎曼' in json.dumps(d.model.requests[-1],ensure_ascii=False)
@@ -265,7 +265,7 @@ async def test_native_models_tool_switches_apply_and_restart(tmp_path):
         d.services.push('disabled-tools','今天你好，请继续聊天。')
         await d.wait(lambda:len(d.services.sent)>0)
         names={t['function']['name'] if 'function' in t else t['name'] for t in d.model.requests[-1]['tools']}
-        assert names=={'ask_user','skill','todo_write','user_memory'}
+        assert names=={'ask_user','skill','todo_write','user_memory','web_search','web_fetch','session_event_search','session_event_read','schedule_create','schedule_list','schedule_update','schedule_delete'}
         assert all('baidu-ai-map' not in block for block in re.findall(r'<available_skills>(.*?)</available_skills>',json.dumps(d.model.requests[-1],ensure_ascii=False),re.S))
         assert d.model.requests[-1]['model']=='test-model' and d.get()['defaultModel']==original_default
         before=(root/'config.json').read_bytes()
