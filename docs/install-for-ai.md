@@ -198,7 +198,7 @@ open -t "$DSH_HOME/.env"
 
 这不是完整配置文件，不能整份替换。保留 `version`、`wechat`、人设及其他现有字段。新安装的业务目录默认是 `$DSH_HOME/telos`；有 `TELOS_HOME` 时使用其实际目录。`model_selection: null` 表示跟随宿主；已有独立模型选择时保留它，不用示例覆盖。保存后文件权限设为 `600`。
 
-这里默认开启日历与提醒事项，关闭尚未配置 Token 的地图。用户需要地图时，保存 `BAIDU_MAP_AUTH_TOKEN` 到同一 DSH 凭据环境，并将 `maps` 改为 `true`。本流程不修改软件默认值，只保存用户本次安装的选项。
+这里默认开启日历与提醒事项，关闭尚未配置 Token 的地图。用户需要地图时，按 [百度地图配置](#baidu) 获取 Agent Plan SK，保存到同一 DSH 凭据环境，并将 `maps` 改为 `true`。本流程不修改软件默认值，只保存用户本次安装的选项。
 
 ### 登录、授权、检查与启动
 
@@ -239,6 +239,43 @@ env DSH_HOME="$HOME/Library/Application Support/Telos Harness" dsh --profile tel
 验收默认只读，不为了测试写入真实日历。用户要验证创建/修改时，先展示具体预览，再等待用户文字确认。
 
 交付时用简短清单说明：安装版本、桌面/CLI 入口、数据目录、如何启动/停止、已通过的检查、仍待用户完成的项。Apple 尚未授权时明确写“聊天已就绪，Apple 待授权”；未测的网页、语音或定时能力不要写成“全部通过”。定时任务要求电脑唤醒且 DSH/Telos 运行。
+
+<a id="baidu"></a>
+## 可选：获取和配置百度地图 Token
+
+Telos 调用百度地图 **Agent Plan** 接口，需要 **SK（Service Key）**。桌面界面把它称为“百度地图 Token”，DSH 中的凭据名称是 `BAIDU_MAP_AUTH_TOKEN`。
+
+### 去哪里获取
+
+1. 打开 [百度地图 Agent Plan 官方页面](https://lbs.baidu.com/apiconsole/agentplan)。
+2. 由用户本人登录百度账号，按页面提示获取 Agent Plan 的 SK。若当前页面要求开通服务或选择套餐，先让用户了解额度与费用，再由用户决定。
+3. 用户自行复制 SK，并直接填入下面的本机配置位置。AI 不需要读取、回显或代为保管它。
+
+百度的 [官方 Agent Plan 说明](https://github.com/baidu-maps/workbuddy-agent-plugin/blob/main/skills/baidu-ai-map/SKILL.md) 区分了 SK 和其他地图产品的 AK。不要引导用户到普通 AK 管理页创建服务器端或浏览器端 AK，也不需要为 Telos 另装百度 MCP 服务。具体按钮名称、额度和价格以登录后的官方页面为准；不要承诺固定免费额度。
+
+### 桌面版填在哪里
+
+打开 Telos 页面 → 开启“百度地图” → 在“百度地图 Token”输入框粘贴 SK → 点击“保存到 DSH” → 点击“保存并应用”。
+
+“已配置”只表示凭据已保存，不代表接口鉴权或额度已验证。凭据不填进人设、Skill 文件或聊天。
+
+### CLI 填在哪里
+
+在当前实例的 DSH 凭据环境中保存；使用 `.env` 时，由用户在本机编辑当前 `$DSH_HOME/.env`，添加或更新这一项：
+
+```dotenv
+BAIDU_MAP_AUTH_TOKEN=用户自己的AgentPlanSK
+```
+
+上面是格式示例，不是可用密钥。保留其他条目，文件权限设为 `600`，不要输出文件内容。填写原始 SK 即可，不加 `Bearer ` 前缀；鉴权前缀由 Telos 自动添加。
+
+停止当前 CLI 实例，在实际业务目录的 `config.json` 中将 `tools.maps` 设为 `true`，保留 `tools.apple: true` 和其他配置；然后用原 DSH_HOME、TELOS_HOME、profile 重启。
+
+### 怎样验证成功
+
+在微信发送“请用百度地图查一下北京颐和园的地址”。工具实际返回地点信息才算通过；“Token 已保存”或模型凭常识回答都不算。
+
+如果返回认证、额度或网络错误，按 [地图排障](troubleshooting.md#optional) 检查。测试可能消耗百度额度，使用一个明确地点的一次查询即可。暂时不配置时保持地图关闭，微信聊天和已授权的 Apple 功能仍可使用。
 
 <a id="upgrade"></a>
 ## 5. 升级、恢复与中断后继续

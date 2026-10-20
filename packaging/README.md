@@ -28,6 +28,8 @@ Telos 只提供微信收发、Apple/百度地图工具、随包 Skill 内容、�
 
 “测试连接”只向所选模型发送一句测试文字，不加载人设、聊天或 Apple 数据，会产生少量模型调用费用。百度功能仍需单独的 `BAIDU_MAP_AUTH_TOKEN`，DeepSeek 账号不包含百度授权。关闭 Apple 会停止后台读取、撤下业务工具并拒绝确认写入；关闭地图会撤下地图工具与随包 Skill 目录。宿主另行安装的 Skill 仍归 DSH 管理，但不能绕过已关闭的执行工具。重新开启不会自动执行草稿，写入仍需用户确认。
 
+百度凭据获取入口是 [百度地图 Agent Plan](https://lbs.baidu.com/apiconsole/agentplan)：登录百度账号，按页面指引获取 **SK（Service Key）**，填入桌面的“百度地图 Token”或 CLI 的 `BAIDU_MAP_AUTH_TOKEN`。普通地图 Web API、JavaScript API 或 MCP 的 AK 不适用于 Telos 这条接口。无需另外安装百度 MCP；额度与收费以官方页面为准。保存凭据并开启地图后，用一次明确地点查询验证实际调用；详细步骤见 [百度地图配置指南](https://github.com/lucifersteps/telos-harness/blob/main/docs/install-for-ai.md#baidu)。
+
 CLI 继续使用 DSH 原生凭据服务或 `$DSH_HOME/.env`；不要把凭据放进聊天或 Skill 文件。`$DSH_HOME/telos/config.json` 可保存非敏感的 `model_selection`（provider、model、可选 reasoningEffort；null 表示跟随宿主）与 `tools`（apple、maps 布尔开关），重启后生效。旧配置未指定时保留原行为。
 
 Apple 当前数据通过 personalPlan query/detail 按需读取，运行上下文不重复预载完整日历和提醒事项。待确认内容与实际回执仍在同一步更新，未变化的上下文由 DSH 原生机制去重。旧会话继续由 DSH 恢复和压缩，不删除历史或业务账本。

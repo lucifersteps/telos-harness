@@ -64,13 +64,21 @@ CLI 与桌面使用同一个 `.tgz` 安装包。**CLI 必须保持运行**；关
 | --- | --- |
 | 微信聊天 | DSH 模型连接、微信扫码；已有模型可直接复用，不一定要新增 API Key |
 | Apple 日历与提醒事项 | 默认开启，两项 macOS 权限均需本人授权；写入前仍需文字确认 |
-| 百度地图 | 可选，需要自己的百度 Token |
+| 百度地图 | 可选，在 [百度地图 Agent Plan](https://lbs.baidu.com/apiconsole/agentplan) 登录并获取 SK，填入 Telos 的“百度地图 Token” |
 | 语音消息 | 可选，在 DSH 中启用并准备语音识别服务；Telos 不另行下载语音模型 |
 | 网页搜索与读取 | 复用 DSH 的网页服务和凭据；模型聊天可用并不代表搜索后端已就绪 |
 | 用户记忆、当前会话历史回查 | 由插件接入；历史回查包含压缩前消息，只允许查询当前微信会话 |
 | 定时提醒 | 无额外调度 API Key；任务在微信中管理，不显示在桌面普通会话任务列表中 |
 
 密钥直接填入 DSH 的凭据界面，CLI 用户可按安装指南在本机配置。不要把 API Key、微信登录文件或完整聊天日志粘贴到 AI 聊天或 GitHub。
+
+### 百度地图 Token 去哪里获取
+
+打开 [百度地图 Agent Plan 官方页面](https://lbs.baidu.com/apiconsole/agentplan)，登录百度账号，按页面指引获取 **SK（Service Key）**。Telos 的“百度地图 Token”和配置项 `BAIDU_MAP_AUTH_TOKEN` 都填写这个 SK；普通地图 Web API、JavaScript API 或 MCP 使用的 AK 不适用于这里。
+
+桌面版在 Telos 页开启“百度地图”，把 SK 填入“百度地图 Token”，点击“保存到 DSH”，再“保存并应用”。CLI 用户将它保存在当前 DSH 的凭据环境中，并开启地图工具。申请、配置和测试步骤见 [百度地图配置指南](docs/install-for-ai.md#baidu)。
+
+额度和收费以百度当前页面为准；暂时不使用地图可以跳过，不影响微信聊天及已授权的 Apple 功能。
 
 ## 怎样算安装成功
 

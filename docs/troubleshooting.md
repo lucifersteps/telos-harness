@@ -98,7 +98,14 @@ Telos 复用 DSH 网页服务，不另存一套搜索密钥；具体后端可能
 <a id="optional"></a>
 ## 地图、语音或历史回查不可用
 
-地图需开启工具并在同一 DSH 凭据环境中配置 `BAIDU_MAP_AUTH_TOKEN`；DeepSeek 账号不包含百度授权。不使用地图时关闭地图即可。
+地图需开启工具并在同一 DSH 凭据环境中配置 `BAIDU_MAP_AUTH_TOKEN`；DeepSeek 账号不包含百度授权。请到 [百度地图 Agent Plan](https://lbs.baidu.com/apiconsole/agentplan) 获取 **SK**，不是到普通地图 API 控制台申请 AK。完整步骤见 [百度地图配置](install-for-ai.md#baidu)。
+
+- 提示未配置 Token：桌面检查是否点击“保存到 DSH”；CLI 检查是否写入当前实例的 DSH_HOME，并在修改后重启。
+- 提示认证失败：确认填写的是 Agent Plan SK，未误填 AK、未带多余空白或 `Bearer ` 前缀。需要检查或更换密钥时由用户在本机操作，不把密钥发到聊天。
+- 提示额度或服务错误：登录 Agent Plan 页面检查服务状态及可用额度，费用以官方当前说明为准。
+- 提示超时或网络失败：检查 DSH 进程访问百度接口的网络连接；不要把所有错误都当作密钥错误。
+
+不使用地图时关闭地图即可，不影响聊天与已授权的 Apple 功能。
 
 语音由 DSH 自身准备服务和模型。Telos 没有 `--telos-prepare-voice`，只开启模块不等于语音模型已下载。文字聊天正常时可稍后配置语音。
 
