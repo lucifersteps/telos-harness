@@ -2,7 +2,7 @@
 
 本指南供能操作用户本机的 AI 执行，也可供用户手动操作。目标是完成微信聊天、默认启用的 Apple 日历与提醒事项配置，并留下可重复的启动方式。只有网页或聊天能力时，请给出对应步骤，由用户执行。
 
-适用版本：Telos **0.4.11**，已验证 DSH **0.2.1-rc.2**，macOS 14+ Apple Silicon。安装其他版本时，应阅读该 Release/tag 对应的文档，不要承诺旧包具有新功能。
+适用版本：Telos **0.4.12**，已验证 DSH **0.2.1-rc.2**，macOS 14+ Apple Silicon。安装其他版本时，应阅读该 Release/tag 对应的文档，不要承诺旧包具有新功能。
 
 ## 从仓库链接开始
 
@@ -67,20 +67,20 @@ command -v dsh
 
 安装来源：[Telos Releases](https://github.com/lucifersteps/telos-harness/releases)。普通使用者不需要克隆源码、安装 Python 或执行构建脚本。
 
-本指南对应 [0.4.11 Release](https://github.com/lucifersteps/telos-harness/releases/tag/v0.4.11)，附件包含安装包与 SHA256 校验文件。以下是该版已发布的固定附件地址，不依赖 GitHub API、GitHub 账号、`gh`、Git 或 Python。没有现成下载时，在用户 Mac 的终端执行：
+本指南对应 [0.4.12 Release](https://github.com/lucifersteps/telos-harness/releases/tag/v0.4.12)，附件包含安装包与 SHA256 校验文件。以下是该版已发布的固定附件地址，不依赖 GitHub API、GitHub 账号、`gh`、Git 或 Python。没有现成下载时，在用户 Mac 的终端执行：
 
 ```sh
 mkdir -p "$HOME/Downloads"
-TELOS_DOWNLOAD_DIR="$(mktemp -d "$HOME/Downloads/telos-0.4.11.XXXXXX")"
+TELOS_DOWNLOAD_DIR="$(mktemp -d "$HOME/Downloads/telos-0.4.12.XXXXXX")"
 cd "$TELOS_DOWNLOAD_DIR" || exit 1
 curl --fail --location --retry 2 --connect-timeout 20 \
-  --output telos-harness-0.4.11-macos-arm64.tgz \
-  https://github.com/lucifersteps/telos-harness/releases/download/v0.4.11/telos-harness-0.4.11-macos-arm64.tgz || exit 1
+  --output telos-harness-0.4.12-macos-arm64.tgz \
+  https://github.com/lucifersteps/telos-harness/releases/download/v0.4.12/telos-harness-0.4.12-macos-arm64.tgz || exit 1
 curl --fail --location --retry 2 --connect-timeout 20 \
-  --output telos-harness-0.4.11-macos-arm64.tgz.sha256 \
-  https://github.com/lucifersteps/telos-harness/releases/download/v0.4.11/telos-harness-0.4.11-macos-arm64.tgz.sha256 || exit 1
-shasum -a 256 -c telos-harness-0.4.11-macos-arm64.tgz.sha256 || exit 1
-TELOS_ARCHIVE="$TELOS_DOWNLOAD_DIR/telos-harness-0.4.11-macos-arm64.tgz"
+  --output telos-harness-0.4.12-macos-arm64.tgz.sha256 \
+  https://github.com/lucifersteps/telos-harness/releases/download/v0.4.12/telos-harness-0.4.12-macos-arm64.tgz.sha256 || exit 1
+shasum -a 256 -c telos-harness-0.4.12-macos-arm64.tgz.sha256 || exit 1
+TELOS_ARCHIVE="$TELOS_DOWNLOAD_DIR/telos-harness-0.4.12-macos-arm64.tgz"
 ```
 
 每步失败即停止，不安装部分下载的文件。换到新终端时，需要重新设置 `TELOS_ARCHIVE` 为已下载文件的绝对路径。也可让用户从 Release 页面下载这两个同名附件，再在它们所在目录校验。
@@ -89,16 +89,16 @@ TELOS_ARCHIVE="$TELOS_DOWNLOAD_DIR/telos-harness-0.4.11-macos-arm64.tgz"
 
 ```sh
 gh release list --repo lucifersteps/telos-harness --limit 10
-gh release view v0.4.11 --repo lucifersteps/telos-harness --json tagName,assets,url
+gh release view v0.4.12 --repo lucifersteps/telos-harness --json tagName,assets,url
 ```
 
 确认版本存在后，在新建的空下载目录执行：
 
 ```sh
-gh release download v0.4.11 --repo lucifersteps/telos-harness \
-  --pattern 'telos-harness-0.4.11-macos-arm64.tgz' \
-  --pattern 'telos-harness-0.4.11-macos-arm64.tgz.sha256'
-shasum -a 256 -c telos-harness-0.4.11-macos-arm64.tgz.sha256
+gh release download v0.4.12 --repo lucifersteps/telos-harness \
+  --pattern 'telos-harness-0.4.12-macos-arm64.tgz' \
+  --pattern 'telos-harness-0.4.12-macos-arm64.tgz.sha256'
+shasum -a 256 -c telos-harness-0.4.12-macos-arm64.tgz.sha256
 ```
 
 预期结果为文件名后显示 `OK`。失败则停止安装并重新下载。没有 `.sha256` 附件时，可计算 `shasum -a 256 安装包路径` 并与该 Release 附件的 GitHub `digest` 或维护者提供的 SHA256 比较；仅计算本地哈希不算完成校验。两者都没有时，先取得校验值。
@@ -106,14 +106,14 @@ shasum -a 256 -c telos-harness-0.4.11-macos-arm64.tgz.sha256
 检查包内元数据，核对版本、平台与宿主要求：
 
 ```sh
-tar -xOf telos-harness-0.4.11-macos-arm64.tgz package/package.json
-tar -xOf telos-harness-0.4.11-macos-arm64.tgz package/component-manifest.json
+tar -xOf telos-harness-0.4.12-macos-arm64.tgz package/package.json
+tar -xOf telos-harness-0.4.12-macos-arm64.tgz package/component-manifest.json
 ```
 
 应是 `telos-harness`、目标版本、`darwin` / `arm64`，manifest 的 `min_macos` 为 `14`、`harness` 为 `0.2.1rc2`。安装变量使用下载文件的**绝对路径**，不要把示例路径原样执行：
 
 ```sh
-TELOS_ARCHIVE="/absolute/path/telos-harness-0.4.11-macos-arm64.tgz"
+TELOS_ARCHIVE="/absolute/path/telos-harness-0.4.12-macos-arm64.tgz"
 test -f "$TELOS_ARCHIVE"
 ```
 
@@ -333,9 +333,9 @@ BAIDU_MAP_AUTH_TOKEN=用户自己的AgentPlanSK
 
 发生版本不兼容时保留现场和备份，参照对应版本说明恢复；不要保证任意旧版能读取新版数据。卸载插件与删除数据是两件事，除非用户明确要求，不删除历史、凭据、微信登录状态或业务账本。
 <a id="cli-office"></a>
-## CLI 的 Office 文件读取环境（开发版）
+## CLI 的 Office 文件读取环境
 
-仅适用于包含文件读取改动的新构建，已发布的 0.4.11 不包含此能力。桌面版优先复用 DSH 已有的 `load_workspace_dependencies`，不重复安装 Python 库。
+Telos 0.4.12 起支持文件读取。桌面版优先复用 DSH 已有的 `load_workspace_dependencies`，不重复安装 Python 库。
 
 独立 CLI 使用相同的官方 Office 技能。已有官方 primary-runtime 时，启动前设置 `DSH_PRIMARY_RUNTIME` 为包含 `runtime.json` 的绝对目录。若机器尚无此环境，可使用官方 Python runtime 包的准备接口（需要网络和磁盘空间；由安装 AI 先解释并按用户授权操作）：
 

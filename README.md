@@ -14,7 +14,7 @@
 
 ![Telos 六格漫画：从遗漏安排、反复尝试管理 App，到在微信里发送截图和语音，由 Telos 整理到 Apple 日历与提醒事项，事务虽多依然从容有序。](docs/assets/telos-story.png)
 
-**多一份从容，从 Telos 开始。** [下载安装包](https://github.com/lucifersteps/telos-harness/releases/tag/v0.4.11)，或按下方的[「让 AI 帮你安装」](#让-ai-帮你安装)开始配置。
+**多一份从容，从 Telos 开始。** [下载安装包](https://github.com/lucifersteps/telos-harness/releases/tag/v0.4.12)，或按下方的[「让 AI 帮你安装」](#让-ai-帮你安装)开始配置。
 
 [查看六宫格漫画原图](docs/assets/telos-story.png) · [查看宣传海报（含项目二维码）](docs/assets/telos-poster.png)
 
@@ -36,11 +36,12 @@ Telos 面向使用 **iPhone 和 Mac** 的用户，目前支持 **macOS 14+、App
 | 🧠 用户记忆 | 保存和更新称呼、偏好等长期信息 | “记住，我喜欢简短直接的回复。”<br>“忘记我之前告诉你的称呼偏好。” |
 | 💬 历史回查 | 检索当前微信会话的旧消息，包括压缩前内容及前后文 | “找一下我们之前讨论报销的那段对话。”<br>“查一下我上次提到的会议时间。” |
 | 🖼️ 图片与语音 | 理解图片、识别语音，整理为回答或操作草稿 | 发送海报：“提取活动时间和地点，整理成日程草稿。”<br>发送语音：“把这些事情整理成待办。” |
+| 📄 文件读取 | 按需读取 PDF 文字层、Word（DOCX）、Excel（XLSX）及文本文件 | 发送文件：“把文件中的会议整理成日程草稿。”<br>“总结这份材料的重点。” |
 | 🎭 人设与 Skill | 选择内置或自定义人设，使用 DeepSeek Harness 中适用的 Skill | 在设置中选择“默认助手”或“黎曼”，也可加载自己的提示词文件。 |
 
 **使用说明：** 涉及日历和提醒事项的创建、修改或删除时，Telos 会先展示预览，收到你的文字确认后再执行。地图需要百度 Agent Plan SK，网页需要可用的 DeepSeek Harness 网页服务，图片和语音分别依赖模型视觉能力与语音识别服务。历史回查仅限当前微信会话。
 
-**开发中（尚未包含在 0.4.11 安装包）：** 支持在微信发送 PDF、Word（DOCX）、Excel（XLSX）和文本文件，例如“把文件中的会议整理成日程草稿”。复用 DeepSeek Harness 的 Office 技能与工具；PDF 借助 macOS PDFKit 读取文字层，无需另配解析 API Key。桌面版复用内置环境，独立 CLI 需准备 Office 运行环境。格式限制与数据保存方式见[文件读取说明](packaging/README.md#微信文件读取开发版)。
+**文件读取：** 支持在微信发送 PDF、Word（DOCX）、Excel（XLSX）和文本文件。复用 DeepSeek Harness 的 Office 技能与工具；PDF 借助 macOS PDFKit 读取文字层，无需另配解析 API Key。桌面版复用内置环境，独立 CLI 需准备 Office 运行环境。格式限制与数据保存方式见[文件读取说明](packaging/README.md#微信文件读取)。
 
 ## 安装前
 
@@ -56,11 +57,11 @@ DeepSeek Harness（下文简称 DSH）支持桌面版和 CLI，两种方式使�
 
 安装包自带 Telos 所需的 Python 运行环境和 Apple 组件，无需安装 Python、Homebrew 或 Xcode。选用 Node/CLI 时，仍需要 DSH 对应的 Node.js 运行环境。
 
-**当前版本：0.4.11 预览版。** 从 [0.4.11 Release](https://github.com/lucifersteps/telos-harness/releases/tag/v0.4.11) 下载安装包与 SHA256 校验文件。不要把源码 ZIP 当作插件安装包。
+**当前版本：0.4.12。** 从 [0.4.12 Release](https://github.com/lucifersteps/telos-harness/releases/tag/v0.4.12) 下载安装包与 SHA256 校验文件。不要把源码 ZIP 当作插件安装包。
 
-当前预览包使用 ad-hoc 签名，尚未完成 Developer ID 公证及另一台实体 Mac 的首次安装验证；如遇系统拦截，见 [排障指南](docs/troubleshooting.md#macos-blocked)。
+当前安装包使用 ad-hoc 签名，尚未完成 Developer ID 公证及另一台实体 Mac 的首次安装验证；如遇系统拦截，见 [排障指南](docs/troubleshooting.md#macos-blocked)。
 
-**插件市场安装来源：** 使用 [0.4.11 预构建安装包](https://github.com/lucifersteps/telos-harness/releases/download/v0.4.11/telos-harness-0.4.11-macos-arm64.tgz)，并核对同一 Release 的 SHA256 文件。仓库根目录的 `package.json` 声明正式插件元数据；源码不包含已编译的 Python 和 Apple 组件，不能直接用 `github:lucifersteps/telos-harness` 代替安装包。市场安装完成后，仍需完成模型配置、微信扫码和 Apple 授权。
+**插件市场安装来源：** 使用 [0.4.12 预构建安装包](https://github.com/lucifersteps/telos-harness/releases/download/v0.4.12/telos-harness-0.4.12-macos-arm64.tgz)，并核对同一 Release 的 SHA256 文件。仓库根目录的 `package.json` 声明正式插件元数据；源码不包含已编译的 Python 和 Apple 组件，不能直接用 `github:lucifersteps/telos-harness` 代替安装包。市场安装完成后，仍需完成模型配置、微信扫码和 Apple 授权。
 
 ## 让 AI 帮你安装
 

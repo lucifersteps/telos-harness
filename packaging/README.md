@@ -1,6 +1,6 @@
-# Telos Harness 插件（隔离预览版）
+# Telos Harness 插件
 
-0.4.11 适用于 macOS 14+ Apple Silicon、官方 Node/CLI 或官网桌面版 DeepSeek Harness 0.2.1-rc.2。安装包包含 Python 运行环境和编译后的 Apple helper，不需要用户安装 Python、Homebrew 或 Xcode。
+0.4.12 适用于 macOS 14+ Apple Silicon、官方 Node/CLI 或官网桌面版 DeepSeek Harness 0.2.1-rc.2。安装包包含 Python 运行环境和编译后的 Apple helper，不需要用户安装 Python、Homebrew 或 Xcode。
 
 首次使用请先阅读 [项目首页](https://github.com/lucifersteps/telos-harness#readme) 和 [AI 安装指南](https://github.com/lucifersteps/telos-harness/blob/main/docs/install-for-ai.md)，遇到问题查看 [排障指南](https://github.com/lucifersteps/telos-harness/blob/main/docs/troubleshooting.md)。本文保留详细配置与功能说明；安装旧版本时请阅读对应 tag 的文档。
 
@@ -20,7 +20,7 @@ Telos 只提供微信收发、Apple/百度地图工具、随包 Skill 内容、�
 
 ## 桌面版
 
-1. 在“插件 → 添加插件”安装 `telos-harness-0.4.11-macos-arm64.tgz` 并启用。
+1. 在“插件 → 添加插件”安装 `telos-harness-0.4.12-macos-arm64.tgz` 并启用。
 2. 在 Telos 页选择模型：跟随 DSH 默认模型、使用 DeepSeek 账号、选择已有 API 模型，或展开“添加其他 API 模型”。账号登录直接打开 DSH 原生入口；API 模型支持 OpenAI Chat Completions、Responses 与 Anthropic Messages 协议。
 3. 在页面输入模型 API Key 或百度 Token，点击“保存到 DSH”。凭据直接调用 DSH credentials 服务，不经过 Telos 后端、不进入 Telos 配置或聊天，也不回显已存密钥。添加的 API Provider 通过 DSH settings 持久化；微信独立模型选择不会改变宿主默认模型。无模型列表时保存 Key 后刷新目录，也可手动填写准确的模型 ID。
 4. 选择微信人设，保留 Apple 开启，百度地图按需开启，点击“保存并应用”。运行中应用配置会短暂重启 Telos，保留历史、待确认操作和防重复写入记录。
@@ -67,7 +67,7 @@ BAIDU_MAP_AUTH_TOKEN=填写自己的地图令牌
 安装包必须先下载并校验，下面 `/path/to/` 替换为实际绝对路径。安装并运行：
 
 ```sh
-dsh plugin --profile telos add telos-harness@file:/path/to/telos-harness-0.4.11-macos-arm64.tgz --offline
+dsh plugin --profile telos add telos-harness@file:/path/to/telos-harness-0.4.12-macos-arm64.tgz --offline
 dsh --profile telos --telos-setup
 dsh --profile telos --telos-login
 dsh --profile telos --telos-authorize
@@ -128,7 +128,7 @@ dsh --profile telos --telos-persona-file "/absolute/path/my-persona.md"
 
 ## 数据、升级与确认
 
-数据默认位于 `$DSH_HOME/telos`，可用 `TELOS_HOME` 指定业务目录。历史、图片附件、凭据和语音模型由 DSH 保存；Telos 保存草稿、确认、Apple 操作账本、微信登录与收发回执，以及下述开发版接收的文件原件。微信登录信息属于渠道业务状态。
+数据默认位于 `$DSH_HOME/telos`，可用 `TELOS_HOME` 指定业务目录。历史、图片附件、凭据和语音模型由 DSH 保存；Telos 保存草稿、确认、Apple 操作账本、微信登录与收发回执，以及接收的文件原件。微信登录信息属于渠道业务状态。
 
 0.2.x 升级前停止该隔离实例，备份整个 DSH_HOME，在 DSH 配置同样的模型和默认选择。旧 Telos `config.json` 中的 `model`、`base_url` 会保留但不再使用，插件不会自动修改宿主设置或迁移密钥。CLI 从 sdk-minimal 切换到上述 base profile，保留同一个 DSH_HOME，即可复用原生凭据、历史和 Telos 数据。不要同时启动两个微信实例。
 
@@ -158,9 +158,9 @@ Agent 通过 `user_memory` 的 read/write 维护小型 Markdown 文件；write �
 
 文件更新成功不等于历史日志删除：要求忘记会删除文件中的资料，但已有会话仍遵循 DSH 的历史保留规则。用户可以手工编辑文件；工具字符上限约束工具写入，Desktop 的原生加载另有 8 KiB 的上下文预算。CLI 已有全局文件加载器时复用它的配置，以 AGENTS.md（或宿主配置的候选名称）到 user.md 的符号链接接入；没有第二份资料副本，也不改宿主全局设置。没有定时整理、额外模型调用或压缩参数覆盖。
 
-## 微信文件读取（开发版）
+## 微信文件读取
 
-此能力尚未包含在已发布的 0.4.11 安装包，需包含该改动的新构建。在微信发送或引用文件，并附上“提取会议安排”“总结这份材料”等要求。只发文件且上下文没有明确任务时，助手应简短确认收到并询问用途；已有任务则继续处理。后续可继续追问已接收的文件。
+从 0.4.12 起支持文件读取。在微信发送或引用文件，并附上“提取会议安排”“总结这份材料”等要求。只发文件且上下文没有明确任务时，助手应简短确认收到并询问用途；已有任务则继续处理。后续可继续追问已接收的文件。
 
 - Word `.docx`、Excel `.xlsx`：调用 DSH 官方 `office-docx` / `office-xlsx` 技能，使用宿主 Python 环境中的 python-docx / openpyxl 按需检查原文件，不预先转换成 TXT。Excel 公式、单元格类型等仍可检查；读取公式不等于重新计算公式。
 - PDF：DSH 0.2.1-rc.2 的原生 `read` 只读 UTF-8，桌面 PDF 预览并不是 Agent 正文读取工具。本插件提供小型 `telos-pdf` 技能，经 DSH 原生 `bash` 调用 macOS PDFKit，按页读取文字层。每次最多 10 页、24,000 字符，支持单页字符偏移续读。扫描页没有文字时明确告知，不做 OCR；多栏、表格顺序及图片内容不保证完整，可发送关键页面截图。
@@ -178,4 +178,4 @@ Agent 通过 `user_memory` 的 read/write 维护小型 Markdown 文件；write �
 
 仓库根目录 `package.json` 和 `cordis.patch.yml` 声明 Telos 的正式身份与入口；`plugin/package.json`、`plugin/cordis.patch.yml` 是源码回归测试使用的隔离宿主夹具。构建脚本读取根目录元数据，把 `./plugin/` 模块路径映射到归档根目录，并打包 Python、Apple 和 SILK 组件。
 
-源码克隆不含这些二进制，不支持直接作为用户安装包。插件市场应通过 `tarball` 字段指向 GitHub Release 中的预构建 `.tgz`。`engines.dsh` 只声明已验证的 `0.2.1-rc.2`；扩大范围前需验证新宿主。此次元数据整理不重建或替换已经发布的 0.4.11 附件，新元数据随下次构建进入安装包。
+源码克隆不含这些二进制，不支持直接作为用户安装包。插件市场应通过 `tarball` 字段指向 GitHub Release 中的预构建 `.tgz`。`engines.dsh` 只声明已验证的 `0.2.1-rc.2`；扩大范围前需验证新宿主。发布后的附件保持不变，更新通过新版本分发。

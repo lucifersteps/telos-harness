@@ -1,6 +1,6 @@
 # 安全问题报告
 
-当前维护版本为 0.4.11。旧版本建议升级。
+当前维护版本为 0.4.12。旧版本建议升级。
 
 请通过 GitHub 的 [私密漏洞报告入口](https://github.com/lucifersteps/telos-harness/security/advisories/new) 向维护者报告安全问题，不要先在公开 Issue 或 PR 中披露可利用细节。
 
