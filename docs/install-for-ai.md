@@ -332,3 +332,20 @@ BAIDU_MAP_AUTH_TOKEN=用户自己的AgentPlanSK
 配置中断时，从尚未完成的一步继续：已有正确安装包就不重复下载，已登录就不重新扫码，已授权就查询状态。正在运行时先停止再修改配置。不要同时启动桌面和 CLI 来轮询同一微信账号。
 
 发生版本不兼容时保留现场和备份，参照对应版本说明恢复；不要保证任意旧版能读取新版数据。卸载插件与删除数据是两件事，除非用户明确要求，不删除历史、凭据、微信登录状态或业务账本。
+<a id="cli-office"></a>
+## CLI 的 Office 文件读取环境（开发版）
+
+仅适用于包含文件读取改动的新构建，已发布的 0.4.11 不包含此能力。桌面版优先复用 DSH 已有的 `load_workspace_dependencies`，不重复安装 Python 库。
+
+独立 CLI 使用相同的官方 Office 技能。已有官方 primary-runtime 时，启动前设置 `DSH_PRIMARY_RUNTIME` 为包含 `runtime.json` 的绝对目录。若机器尚无此环境，可使用官方 Python runtime 包的准备接口（需要网络和磁盘空间；由安装 AI 先解释并按用户授权操作）：
+
+```sh
+python3 -m venv "$HOME/.dsh-office-bootstrap"
+"$HOME/.dsh-office-bootstrap/bin/python" -m pip install 'deepseek-harness-runtime-bin==0.2.1rc2'
+export DSH_PRIMARY_RUNTIME="$("$HOME/.dsh-office-bootstrap/bin/python" -c 'from deepseek_harness_runtime import download_primary_runtime; print(download_primary_runtime())')"
+dsh --profile telos
+```
+
+沿用现有的 DSH_HOME、TELOS_HOME 和 profile。首次准备完成后，保存返回的绝对路径到该 CLI 的启动环境，后续启动只需设置此路径；不要每次聊天重新下载安装。可以使用现有专用 Python 环境运行官方准备接口，已有目录不应覆盖重建。下载失败时排查网络并使用官方接口重试，不拼装运行环境、不跳过校验。
+
+Telos 只把该路径交给 DSH 原生依赖工具；环境校验、路径返回和 Office 技能由 DSH 实现。若用户选择自己的 Python 环境，则按官方技能使用已安装的 python-docx/openpyxl，不在微信会话中自行安装包。PDF 文字层使用系统 PDFKit，不依赖这套 Office 环境；扫描 PDF 不包含 OCR 保证。

@@ -65,8 +65,9 @@ def extract_attachments(items: list[dict]) -> list[AttachmentRef]:
     for item in items:
         if not isinstance(item, dict):continue
         ref = (item.get("ref_msg") or {}).get("message_item")
-        if isinstance(ref, dict) and item_type_value(ref) == ITEM_IMAGE:
-            attachments.append(_attachment("image", ref.get("image_item") or ref))
+        if isinstance(ref, dict) and item_type_value(ref) in (ITEM_IMAGE, ITEM_FILE):
+            kind = "image" if item_type_value(ref) == ITEM_IMAGE else "file"
+            attachments.append(_attachment(kind, ref.get(kind + "_item") or ref))
         item_type = item_type_value(item)
         if item_type == ITEM_IMAGE:
             attachments.append(_attachment("image", item.get("image_item") or item))
@@ -138,10 +139,49 @@ def create_wechat_media_resolver(
                     media_dir=target_dir,
                     fetch_bytes=fetch_bytes,
                 )
+            for candidate in (item, ref_item):
+                if isinstance(candidate, dict) and item_type_value(candidate) == ITEM_FILE:
+                    await _resolve_file_item(candidate, config=config, media_dir=target_dir, fetch_bytes=fetch_bytes)
         message["item_list"] = item_list
         return message
 
     return resolve
+
+
+async def _resolve_file_item(item, *, config, media_dir, fetch_bytes):
+    file = item.get("file_item")
+    if not isinstance(file, dict):
+        file = item["file_item"] = {}
+    file["name"] = str(file.get("file_name") or file.get("name") or "attachment")[:240]
+    try:
+        media = file.get("media") or {}
+        query = str(media.get("encrypt_query_param") or "")
+        url = str(media.get("full_url") or file.get("url") or "")
+        if query:
+            url = _cdn_download_url(config.cdn_base_url, query)
+        else:
+            _assert_wechat_media_url(url)
+        data = fetch_bytes(url, 30.0)
+        if hasattr(data, "__await__"):
+            data = await data
+        if len(data) > 16 * 1024 * 1024:
+            raise ValueError("File exceeds 16 MiB")
+        key = _image_aes_key(file, media)
+        if query and not key:
+            raise ValueError("Encrypted file has no key")
+        if key:
+            data = _aes128_ecb_decrypt(data, key)
+        # Never use a remote filename/path for local storage.
+        media_dir.mkdir(parents=True, exist_ok=True)
+        path = media_dir / ("file_" + sha256_bytes(data))
+        path.write_bytes(data)
+        file["url"] = str(path)
+    except Exception:
+        file.pop("url", None)
+        file.pop("uri", None)
+        file.pop("file_id", None)
+        file["media_error"] = True
+        logger.warning("微信文件下载或解密失败 | msg_id=%s", item.get("msg_id") or "-")
 
 
 async def _resolve_voice_item(item, *, config, fetch_bytes, transcribe):

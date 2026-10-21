@@ -1,3 +1,4 @@
 # Keep imported upstream source bytes and license formatting intact.
 vendor/silk/** -text -whitespace
 licenses/legacy-web/** -text -whitespace
+tests/fixtures/documents/*.pdf binary

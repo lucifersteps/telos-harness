@@ -40,6 +40,8 @@ Telos 面向使用 **iPhone 和 Mac** 的用户，目前支持 **macOS 14+、App
 
 **使用说明：** 涉及日历和提醒事项的创建、修改或删除时，Telos 会先展示预览，收到你的文字确认后再执行。地图需要百度 Agent Plan SK，网页需要可用的 DeepSeek Harness 网页服务，图片和语音分别依赖模型视觉能力与语音识别服务。历史回查仅限当前微信会话。
 
+**开发中（尚未包含在 0.4.11 安装包）：** 支持在微信发送 PDF、Word（DOCX）、Excel（XLSX）和文本文件，例如“把文件中的会议整理成日程草稿”。复用 DeepSeek Harness 的 Office 技能与工具；PDF 借助 macOS PDFKit 读取文字层，无需另配解析 API Key。桌面版复用内置环境，独立 CLI 需准备 Office 运行环境。格式限制与数据保存方式见[文件读取说明](packaging/README.md#微信文件读取开发版)。
+
 ## 安装前
 
 DeepSeek Harness（下文简称 DSH）支持桌面版和 CLI，两种方式使用同一个 Telos 安装包。

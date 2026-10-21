@@ -22,7 +22,7 @@ PNG=png()
 def encrypted_item(data,kind=3,key='asset',**metadata):
     aes=b'1234567890abcdef';pad=16-len(data)%16;encryptor=Cipher(algorithms.AES(aes),modes.ECB()).encryptor()
     cipher=encryptor.update(data+bytes([pad])*pad)+encryptor.finalize()
-    name='voice_item' if kind==3 else 'image_item'
+    name={2:'image_item',3:'voice_item',4:'file_item'}[kind]
     return {'type':kind,name:{'media':{'encrypt_query_param':key,'aes_key':base64.b64encode(aes).decode()},**metadata}},cipher
 
 def assert_wav(data):

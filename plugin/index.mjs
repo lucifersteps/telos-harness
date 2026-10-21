@@ -1,5 +1,6 @@
 // WeChat channel: native Agent API only. No model loop, copied history or retry queue.
 import {createServer} from 'node:http';
+import {fileURLToPath} from 'node:url';
 import {createUserMessage} from '@deepseek-ai/dsh-llm';
 import {admitEncodedImages} from '@deepseek-ai/dsh-attachment';
 import {transcribeVoice} from './voice.mjs';
@@ -16,6 +17,7 @@ import ToolResultPruner from '@deepseek-ai/dsh-compaction-tool-result-pruner';
 import * as Apple from './apple.mjs';
 import * as Maps from './maps.mjs';
 import {mountUserMemory} from './memory.mjs';
+import {mountDocumentTools} from './documents.mjs';
 export const name='telos-wechat';
 export const inject=['agents','sessions','sessionQuery','sessionPersistence','storageDomain','systemPrompt','attachments','agentDefaultModel','telosBusiness','workingDirectory','tools'];
 export async function apply(ctx) {
@@ -57,9 +59,10 @@ export async function apply(ctx) {
     // Native resume runs the same setup, without rewriting history or business state.
     scope.systemPrompt.section({name:'telos:rules',order:0,text:prompt,complete:true,interpolate:false});
     await mountUserMemory(scope,agent,memoryDirectory);
+    await mountDocumentTools(scope,agent);
     mountHistoryTools(scope,agent,history.get('sessionQuery'));
     {
-      await scope.plugin(SkillFilesystem,{customSkillDirs:service.tools?.maps===false?[]:[service.skillsDir],includeDefaultRoots:true,watch:false});
+      await scope.plugin(SkillFilesystem,{customSkillDirs:[fileURLToPath(new URL('./document-skills/',import.meta.url)),...(service.tools?.maps===false?[]:[service.skillsDir])],includeDefaultRoots:true,watch:false});
       await scope.plugin(SkillTool);
       await scope.plugin(TodoTool,{allowParallelInProgress:false});
       await mountScheduleTools(scope,scheduler.scope);

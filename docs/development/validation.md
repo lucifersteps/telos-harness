@@ -1,3 +1,14 @@
+## 微信文件读取 — 原生工具方案（2026-10-21，未发布）
+
+- 保存微信直接发送或引用的原始附件；沿用消息去重、会话恢复与业务确认流程。删除早期“统一转 TXT”的原型和其新增依赖，未新增状态机、文档数据库或独立执行器。
+- Word/Excel 复用官方 `dsh-skill-office`，依赖路径复用 `load_workspace_dependencies`；CLI 可用 `DSH_PRIMARY_RUNTIME` 接入同一个原生工具。处理命令由原生 `dsh-tool-bash` 执行，文本/图片复用 `read` / `read_image`，关闭后台命令与超时转后台。
+- 核对 DSH 0.2.1-rc.2：`read` 只接受 UTF-8；[Office 技能](https://github.com/deepseek-ai/deepseek-harness/tree/master/packages/skill/skill-office) 通过 Python 库处理 DOCX/XLSX；[Office to PDF](https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/subsystems/office-to-pdf.md) 明确不创建模型工具。PDF 文字读取以小型技能调用 macOS PDFKit，每次最多 10 页/24,000 字符，可按页和字符偏移续读；未实现 OCR，不保证视觉版式。
+- 原生功能与原件存储测试 **7 passed（6.12s）**；开发包实际安装、微信加密附件、CLI 三种格式及重启追问/确认、Desktop Host 三种格式与引用附件测试 **7 passed（67.42s）**；确认/steer、记忆隔离、历史回查、图片语音、包清单及人设规则回归 **33 passed（25.11s）**。共 **47 passed**。
+- 实际宿主为官方 DSH 0.2.1-rc.2，文件解析和命令执行为真实调用；模型、微信及 Apple 是本地测试桩。没有验证真实模型自主选工具的成功率，也没有向个人微信发送消息或修改真实日历。CLI Office 测试使用已准备好的官方 primary-runtime；未重复下载官方资源。
+- `bash` 沿用宿主沙箱/授权。其文件沙箱不提供“只能读取附件”的隔离；文档用途提示词不是操作系统安全边界。原生历史检索工具自身的当前会话限制与 Apple 工具的确认流程仍通过回归。
+- 最终本地包为 `0.4.12-dev.3`：收窄旧提示词中的全局 shell 禁令，允许通过已注册的原生工具读取文档；仍禁止安装依赖、获取凭据或绕过 Apple 确认。最终包的清单、人设、CLI/桌面三种文件格式回归 **8 passed（64.40s）**。新包未包含 pypdf/python-docx/openpyxl 等原型新增解析库。
+- 已通过官方插件管理器升级本机桌面安装，替换前备份并核对配置、微信登录和历史数据；安装过程未改写这些数据，原有业务消息完整保留。用户已确认 dev.2 的真实微信收发正常；随后仅修正上述提示词升级至 dev.3，重启后运行中、微信已登录、Apple 已授权，真实模型连接测试成功。未发布新的 Release，已发布的 0.4.11 安装包不变；安装文档仍明确区分开发版功能。
+
 ## 插件市场提交准备（2026-10-20）
 
 - 补齐根目录正式 `package.json`、`dsh.bundle` 清单、仓库链接、MIT 许可、平台及已验证宿主版本声明；构建读取正式元数据，源码测试夹具仍保留隔离身份。

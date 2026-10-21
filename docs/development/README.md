@@ -8,6 +8,7 @@
 - `business.py`、`channel.py`、`settings.py`、`sidecar.py`：业务与微信本机组件。
 - `checkout/src/`：构建和测试所用的 Telos 业务源码快照。
 - `apple_component.py`：通过 macOS LaunchServices 调用独立 Apple 授权组件。
+- `documents.py`：仅保存微信附件原件；`plugin/documents.mjs` 组合 DSH 原生工具与 Office 技能。`plugin/document-skills/telos-pdf/` 是系统 PDFKit 的小型调用指南与适配脚本，不是 PDF 解析器。
 - `personas/`：供微信会话选择的内置人设；可另外选择本机自定义文件。
 - `skills/`：随包提供的 Skill 及第三方许可。
 - `tests/`：模拟模型、Apple、微信及地图的完整流程回归，以及显式启用的真实模型测试。
@@ -37,6 +38,8 @@ bash run-validation.sh
 Apple 权限授予独立的「Telos Apple」，桌面版和 CLI 使用同一路径。本版为 ad-hoc 签名：组件内容更新后可能需要重新授权，本机已验证这一限制。正式分发可通过构建参数 `--sign-identity "Developer ID Application: …"` 使用稳定签名；当前尚未完成 Developer ID 签名、公证及另一台实体 Mac 验证。Telos 原创代码采用 MIT；第三方组件遵循各自许可，见根目录 LICENSE、THIRD_PARTY_NOTICES.md 与安装包 licenses/。
 
 ## 发布与文档同步
+
+文件读取回归使用 `tests/test_documents.py`。设置 `TELOS_TEST_ARCHIVE` 指向包含改动的开发包、`TELOS_TEST_DESKTOP_APP` 指向官方桌面应用；CLI 可另外设置 `TELOS_TEST_PRIMARY_RUNTIME` 指向官方 primary-runtime，未指定时测试可复用该桌面应用的 runtime 资源。Word/Excel 测试依赖官方运行环境，不依赖 Telos 自带解析库。`tests/fixtures/documents/` 仅包含虚构会议、空白页与测试密码 PDF，不含用户资料。部署 CLI 的环境准备见 [安装指南](../install-for-ai.md#cli-office)。
 
 发布新版本时，上传同一构建产生的 `.tgz` 和 `.tgz.sha256`，注明宿主版本、平台与签名状态；同步首页的开发版/发布版状态，以及 AI 安装指南中的版本。安装包内 README 来自 `packaging/README.md`。不要仅更新源码后就把开发包写成已发布版本。
 
