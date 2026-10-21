@@ -137,7 +137,7 @@ CLI 与桌面使用同一个 `.tgz` 安装包。**CLI 必须保持运行**；关
 - [排障指南](docs/troubleshooting.md)：无法下载、模型错误、扫码、权限、网页和定时任务问题。
 - [详细配置与功能说明](packaging/README.md)：人设、语音、记忆、数据位置和业务确认。
 - [更新记录](CHANGELOG.md) · [开发与构建](docs/development/README.md) · [验证范围](docs/development/validation.md)。
-- [参与贡献](CONTRIBUTING.md) · [私密报告安全问题](SECURITY.md)。
+- [参与贡献](CONTRIBUTING.md) · [贡献者](CONTRIBUTORS.md) · [私密报告安全问题](SECURITY.md)。
 
 ## 联系作者
 
