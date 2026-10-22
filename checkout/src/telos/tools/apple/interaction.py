@@ -257,7 +257,7 @@ def create_personal_plan_tool(*, data_dir: Path, options: dict[str, Any],
 
     return ExecutableTool(name=NAME, description=(
         "提交结构化交互结果。query/detail 读取最新 Apple；create/update/delete 提交部分操作草稿。"
-        "程序返回缺失字段和约束；先用已有信息补齐，确实缺失时用 ask_user(text) 提问。信息完整后展示预览并进行唯一一次确认。"
+        "程序返回缺失字段和约束；先用已有信息补齐，确实缺失时用 ask_user(text) 提问。信息完整后由宿主写入策略决定直接保存或展示预览确认；以返回结果为准。"
         "已有操作草稿使用 revise 和 draft_call_id 提交修改字段，程序合并未修改内容。已保存对象先 query/detail 再 update。普通回复直接使用助手文本。"),
         parameters=schema, resolver=guarded_resolver)
 

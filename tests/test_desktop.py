@@ -89,6 +89,7 @@ return Response.json({result,bundles:await ctx.pluginManager.listBundles()});}ca
             await asyncio.sleep(.1)
         raise AssertionError('Desktop operation timed out: '+str(self.get()))
     async def action(self,action,**data):
+        if action=='save':data.setdefault('direct_write',False)
         self.post(action,**data)
         await self.wait(lambda:not self.get()['busy'])
         assert not self.get()['error'],self.get()

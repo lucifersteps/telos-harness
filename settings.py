@@ -3,9 +3,11 @@ import json
 import os
 from pathlib import Path
 
-DEFAULTS={'version':1,'max_steps':24,'persona':'default','wechat':{'enabled':False}}
+DEFAULTS={'version':1,'max_steps':24,'persona':'default','direct_write':True,'wechat':{'enabled':False}}
 
 def runtime_options(config):
+    direct=config.get('direct_write',True)
+    if type(direct) is not bool:raise ValueError('直接写入开关必须为布尔值。')
     tools=config.get('tools',{})
     if not isinstance(tools,dict) or set(tools)-{'apple','maps'} or any(type(v) is not bool for v in tools.values()):
         raise ValueError('工具开关必须为 apple/maps 布尔值。')
@@ -15,7 +17,7 @@ def runtime_options(config):
             or not all(isinstance(model.get(k),str) and model[k].strip() for k in ('provider','model'))
             or any(not isinstance(v,str) or not v.strip() or len(v)>256 for v in model.values())):
             raise ValueError('请选择有效的 DSH 模型。')
-    return {'tools':{'apple':True,'maps':True,**tools},'model_selection':model}
+    return {'direct_write':direct,'tools':{'apple':True,'maps':True,**tools},'model_selection':model}
 
 def read_config(root):
     path=Path(root)/'config.json'

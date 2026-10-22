@@ -20,11 +20,13 @@ from telos.tools.apple.interaction import create_personal_plan_tool, create_pers
 from telos.tools.apple.repair import payload
 from telos.tools.apple.service import canonical, operation_key
 from settings import runtime_options
+from telos.tools.apple.direct import direct_allowed
 
 
 class Business:
     def __init__(self, root, apple, config=None):
         self.enabled=runtime_options(config or {})['tools']
+        self.direct_write=runtime_options(config or {})['direct_write']
         self.root=Path(root);self.root.mkdir(parents=True,exist_ok=True)
         self.path=self.root/'business.sqlite';self.apple=apple
         with self.db() as db:
@@ -43,6 +45,7 @@ class Business:
             service=apple,draft_lookup=self.lookup),create_personal_question_tool(self),maps_tool]}
         # A request hint concerns draft lineage only; todo ownership stays in Harness.
         for tool in [self.tools['personalPlan']]:
+            tool.parameters['properties']['require_confirmation']={'type':'boolean','description':'用户要求先预览/确认时设为 true；不能取消强制确认。'}
             tool.parameters['properties']['request_mode']={'type':'string','enum':['new','continue']}
         self.active={};self.execution_locks={}
 
@@ -98,7 +101,7 @@ class Business:
     async def context(self,session):
         # DSH appends changed runtime contexts. Keep this contribution small and
         # stable; current Apple objects are read through personalPlan query/detail.
-        return {'pending':self.pending(session),
+        return {'direct_write':self.direct_write,'pending':self.pending(session),
                 'receipt':self.active.get(session,{}).get('receipt'),
                 'time':self.active.get(session,{}).get('time')}
 
@@ -107,24 +110,38 @@ class Business:
             async with self.execution_locks.setdefault(session,asyncio.Lock()):
                 return await self._execute(session,cid,name,args,map_token=map_token)
         except (ToolInputError,ValueError) as error:
-            if name=='personalPlan' and isinstance(args,dict) and args.get('action') in {'create','update','delete','batch','revise'}:
-                self.record_draft(session,cid,{k:v for k,v in args.items() if k!='request_mode'},
+            existing=self.lookup(session,cid)
+            if name=='personalPlan' and isinstance(args,dict) and args.get('action') in {'create','update','delete','batch','revise'} and not (existing and existing.result.get('direct')):
+                self.record_draft(session,cid,{k:v for k,v in args.items() if k not in {'request_mode','require_confirmation'}},
                                   {'status':'input_error','execution_started':False,'reason':str(error)})
             raise
 
     async def _execute(self,session,cid,name,args,*,map_token=None):
-        """唯一模型工具入口：校验和预览。任何模型工具调用都不能直接批准写入。"""
+        """唯一模型工具入口：按已配置策略执行；模型不能批准受保护操作。"""
         if (name=='personalPlan' and not self.enabled['apple']) or (name=='baidu_maps' and not self.enabled['maps']):
             raise ToolInputError('该工具已关闭，请在 Telos 插件页面启用后再使用。')
         tool=self.tools.get(name)
         if tool is None:raise ToolInputError('工具不存在。')
         error=validate_json_schema(tool.parameters,args)
         if error:raise ToolInputError(error)
-        args=dict(args);mode=args.pop('request_mode','new')
+        args=dict(args);mode=args.pop('request_mode','new');require_confirmation=args.pop('require_confirmation',False)
         current=self.active[session]
         context=ToolInvocationContext(session_id=session,turn_id=current['key'],tool_call_id=cid,tool_name=name)
         pending=self.pending(session)
         write=name=='personalPlan' and args.get('action') not in {'query','detail'}
+        if write:
+            existing=self.lookup(session,cid)
+            if existing and existing.result.get('direct'):
+                if existing.turn_id==current['key'] and canonical(args)==canonical(existing.args):return existing.result
+                raise ToolInputError('已执行调用的编号不能复用，请使用新的工具调用编号。')
+            if current.get('receipt',{}).get('control'):
+                raise ToolInputError('本轮用户已执行控制指令，不再创建或修改安排。')
+            with self.db() as db:
+                prior=db.execute('SELECT args,result FROM drafts WHERE session=? AND origin=? ORDER BY rowid', (session,current['key'])).fetchall()
+            for old_args,old_result in prior:
+                value=json.loads(old_result)
+                if value.get('direct') and canonical(args)==canonical(json.loads(old_args)):
+                    return value
         if pending and (write or name=='ask_user'):
             raise ToolInputError('已有待处理预览或追问，不能覆盖；可以继续独立查询，然后等待用户回应。')
         if name=='personalPlan' and args.get('action')=='revise':
@@ -141,6 +158,29 @@ class Business:
         else:execution=await tool.resolve_execution(args,context=context)
         if execution.need_confirm:
             preview=execution.approval_preview_value()
+            # Native validation/normalization is shared with confirmation mode.
+            fingerprint=canonical({k:preview.get(k) for k in ('action','kind','id','fields','recurrence_scope')})
+            for _,old_result in prior:
+                value=json.loads(old_result)
+                if value.get('direct') and value.get('fingerprint')==fingerprint:
+                    return value
+            can_direct=(self.direct_write and not require_confirmation and not current.get('scheduled')
+                and not any(json.loads(r).get('direct') for _,r in prior) and direct_allowed(preview))
+            if can_direct:
+                pending={'kind':'approval','id':cid,'origin':current['key'],'args':args,'preview':preview,
+                    'direct':True,'executing':True,'confirmation_key':current['key'],'fingerprint':fingerprint}
+                self.record_draft(session,cid,args,{'status':'executing','direct':True,'fingerprint':fingerprint})
+                self.set_pending(session,pending)
+                try:
+                    result=await execution.run()
+                    result=self.direct_receipt(session,pending,result)
+                except Exception as error:
+                    result={'direct':True,'status':'failed','fingerprint':fingerprint,'reason':str(error),
+                        'text':'本次写入未能核实，请先查询 Apple；不会自动重试。'}
+                self.settle_drafts(session,cid,result)
+                self.persist_receipt(session,result)
+                self.set_pending(session,None)
+                return result
             detail={'args':args,'preview':preview}
             request=ApprovalRequest(request_id=cid,turn_id=current['key'],
                 tool_call_id=cid,tool_name=name,action=execution.description,detail=detail)
@@ -158,6 +198,60 @@ class Business:
             with self.db() as db:db.execute('INSERT OR REPLACE INTO facts VALUES(?,?)',
                 (session,canonical([vars(v) for v in records[-30:]])))
         return result
+
+    def persist_receipt(self,session,result):
+        current=self.active[session]
+        previous=current.get('receipt',{}).get('text','')
+        text=result.get('text','')
+        if previous and text not in previous:text=previous+'\n\n'+text
+        current['receipt']={**result,'text':text}
+        self.save_reply(current['key'],text)
+
+    def direct_receipt(self,session,pending,result):
+        result={k:v for k,v in result.items() if k!='_undo'}
+        op=operation_key(session,pending['origin'],pending['id'])
+        result.update(direct=True,fingerprint=pending['fingerprint'])
+        if result.get('saved') is True:
+            result['undo_id']=op
+            request=ApprovalRequest(request_id=pending['id'],turn_id=pending['origin'],
+                tool_call_id=pending['id'],tool_name='personalPlan',action='已保存',
+                detail={'preview':pending['preview']})
+            result['text']=_approval_markdown_message(request,saved=True)
+        else:result['text']=personal_result_text(pending['args'],result) or '尚未核实保存结果，请先查询，勿重复写入。'
+        return result
+
+    def saved_cards(self,session,text):
+        # Reuse durable drafts/outbox: no extra card state or model interpretation.
+        with self.db() as db:
+            rows=db.execute('SELECT result FROM drafts WHERE session=? ORDER BY rowid DESC',(session,)).fetchall()
+        return [r for row in rows if (r:=json.loads(row[0])).get('undo_id') and r.get('text') and r['text'] in text]
+
+    def latest_card_undo(self,session):
+        with self.db() as db:
+            row=db.execute("SELECT reply FROM messages WHERE session=? AND delivered=1 AND reply IS NOT NULL AND trim(reply)!='' ORDER BY rowid DESC LIMIT 1",(session,)).fetchone()
+        targets={r['undo_id'] for r in self.saved_cards(session,row[0])} if row else set()
+        return next(iter(targets)) if len(targets)==1 else ''
+
+    async def undo(self,session,token=''):
+        async with self.execution_locks.setdefault(session,asyncio.Lock()):
+            if not self.enabled['apple']:return {'status':'disabled','text':'Apple 工具已关闭，尚未撤销。'}
+            if self.pending(session):return {'status':'deny','text':'还有待确认或待回答的操作，请先处理或取消，再撤销已保存的操作。'}
+            with self.db() as db:
+                rows=db.execute('SELECT result FROM drafts WHERE session=? ORDER BY rowid DESC',(session,)).fetchall()
+            candidates=[json.loads(r[0]) for r in rows if json.loads(r[0]).get('undo_id')]
+            candidates=[r for r in candidates if not token or r['undo_id'].endswith(token)]
+            if not candidates:return {'status':'deny','text':'当前会话没有对应的可撤销直接写入记录。'}
+            target=candidates[0]
+            self.set_pending(session,{'kind':'approval','executing':True,'undo_id':target['undo_id'],
+                'confirmation_key':self.active[session]['key']})
+            try:
+                result=await asyncio.to_thread(self.apple.undo,target['undo_id'])
+                result={**result,'text':'这次操作已经撤销，不会继续撤销更早的记录。' if result.get('already_undone') else '已撤销这次保存。'}
+            except Exception as error:
+                result={'status':'deny','reason':str(error),'text':'未能安全撤销：对象可能已被修改、删除或结果未知。请先查询核实，不会覆盖后续修改或重复执行。'}
+            self.persist_receipt(session,result)
+            self.set_pending(session,None)
+            return result
 
     async def confirm(self,session):
         """执行原样批准的草稿；沿用原身份和 Apple 幂等账本，不调用模型生成操作。"""
@@ -190,16 +284,26 @@ class Business:
 
     async def reconcile(self,session,pending):
         if not self.enabled['apple']:return {'status':'disabled','text':'Apple 工具已关闭，尚未核实上次操作。'}
+        if pending.get('undo_id'):
+            try:
+                check=await asyncio.to_thread(self.apple.inspect_operations,[pending['undo_id']+':undo'])
+                saved=check['operations'][0]['status']=='completed' and check['operations'][0]['result'].get('saved') is True
+                result={'text':'已核实上次撤销成功；没有重复执行。' if saved else '上次撤销尚无成功回执，请先查询核实；没有重放撤销。'}
+            except Exception:result={'text':'暂时无法核实上次撤销；没有重复执行。'}
+            self.set_pending(session,None)
+            return result
         preview=pending['preview'];count=len(preview['operations']) if preview['action']=='batch' else 1
         ids=[operation_key(session,pending['origin'],f"{pending['id']}:{i+1}" if preview['action']=='batch' else pending['id']) for i in range(count)]
         try:
             check=await asyncio.to_thread(self.apple.inspect_operations,ids)
             saved=sum(x['status']=='completed' and x['result'].get('saved') is True for x in check['operations'])
             result={'status':'reconciled','saved_count':saved,'text':f'已核对上次操作：{saved} 项有保存记录；未重放写入。'}
+            if pending.get('direct') and saved==1:
+                result=self.direct_receipt(session,pending,check['operations'][0]['result'])
         except Exception:
             result={'status':'unavailable','text':'暂时无法核实上次写入；不会自动重复执行。'}
         # Retire the authorization even if the outcome remains unknown; Apple ledger blocks further writes.
-        self.settle_drafts(session,pending['id'],{**result,'status':'failed'})
+        self.settle_drafts(session,pending['id'],result if result.get('saved') else {**result,'status':'failed'})
         self.set_pending(session,None)
         return result
 
@@ -215,7 +319,8 @@ class Business:
         token=delivery_log_context.set({'delivery_id':key,'input_event_ids':[key]})
         pending=self.pending(session)
         preview=pending.get('text','') if pending and pending['kind']=='approval' else ''
-        try:result=await adapter.send_text(ref,row[0],**({'protected_text':preview} if preview else {}))
+        protected=row[0] if self.saved_cards(session,row[0]) else preview
+        try:result=await adapter.send_text(ref,row[0],**({'protected_text':protected} if protected else {}))
         finally:delivery_log_context.reset(token)
         if not result.ok:return
         with self.db() as db:db.execute('UPDATE messages SET delivered=1 WHERE id=?',(key,))
@@ -233,5 +338,7 @@ class Business:
             if presentation and text.count(presentation)!=1:text=presentation
         parts=[text.strip()] if text.strip() else []
         receipt=self.active.get(session,{}).get('receipt') or {}
+        if not pending and receipt.get('direct') and receipt.get('saved') and receipt.get('text'):
+            return receipt['text']
         if receipt.get('text') and receipt['text'] not in '\n'.join(parts):parts.insert(0,receipt['text'])
         return '\n\n'.join(parts)

@@ -13,6 +13,10 @@ def launch_args():
 
 class Runtime(Channel):
     def __init__(self,root,apple,adapter,*,model='deepseek-flash',api_key,base_url,timeout=180,max_steps=24,event_sink=None):
+        from settings import read_config,write_config
+        config=read_config(root);config.setdefault('direct_write',False)
+        if not (Path(root)/'config.json').exists():config['direct_write']=False
+        write_config(root,config)
         super().__init__(root,apple,adapter,timeout=timeout,event_sink=event_sink)
         self.proc=None
         home=self.root/'harness';profiles=home/'profiles'

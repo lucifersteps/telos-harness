@@ -27,7 +27,7 @@ export async function mountDesktop(ctx,paths,{readConfig,runtime}) {
     try {result=await component(ctx,paths,'status').done;} catch(e){fail(e);}
     let config;
     try {config=await readConfig(paths);} catch(e){fail(e);}
-    return {...result,config:config?{max_steps:config.max_steps,persona:config.persona??'default',persona_file:config.persona_file??'',model_selection:config.model_selection??null,tools:{apple:true,maps:true,...config.tools}}:null,
+    return {...result,config:config?{direct_write:config.direct_write??true,max_steps:config.max_steps,persona:config.persona??'default',persona_file:config.persona_file??'',model_selection:config.model_selection??null,tools:{apple:true,maps:true,...config.tools}}:null,
       model:config?.model_selection??ctx.get('agentDefaultModel')?.currentSelection()??null,
       defaultModel:ctx.get('agentDefaultModel')?.currentSelection()??null,
       running:!!fork,busy,error,qr,voice:voiceStatus(ctx)};
@@ -48,7 +48,7 @@ export async function mountDesktop(ctx,paths,{readConfig,runtime}) {
     }
     if(fork)throw new Error('请先停止 Telos，再修改配置或重新登录；已有草稿和回执会保留。');
     if(action==='save') {
-      if(Object.keys(data).some(key=>!['action','max_steps','persona','persona_file','model_selection','tools'].includes(key)))throw new Error('凭据请通过 DSH 原生服务保存。');
+      if(Object.keys(data).some(key=>!['action','max_steps','persona','persona_file','model_selection','tools','direct_write'].includes(key)))throw new Error('凭据请通过 DSH 原生服务保存。');
       const {action:_,...options}=data;
       if('model_selection' in options)await validateSelection(ctx,options.model_selection);
       await component(ctx,paths,'configure',{},options).done;

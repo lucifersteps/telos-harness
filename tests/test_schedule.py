@@ -23,8 +23,8 @@ def value(request):return json.loads(tool_text(results(request)[-1]))
 
 def assert_telos(request):
     names={t.get('name') or t['function']['name'] for t in request['tools']}
-    assert NAMES|{'personalPlan','user_memory','session_event_read','web_fetch'}<=names
-    assert not names&{'bash','write','subagent'}
+    assert NAMES|{'personalPlan','user_memory','session_event_read','web_fetch','bash','read','read_image'}<=names
+    assert not names&{'write','subagent'}
 
 def test_cli_timer_restart_overdue_and_output_replay(tmp_path):
     async def run():

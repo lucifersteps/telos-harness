@@ -350,10 +350,11 @@ def test_confirmation_receipt_is_current_before_model_and_reply_is_only_result(t
                 for message in request['messages']:
                     content=message.get('content',[])
                     if isinstance(content,str):content=[{'type':'text','text':content}]
-                    blocks.extend(b.get('text','') for b in content if isinstance(b,dict) and '{"pending"' in b.get('text',''))
+                    blocks.extend(b.get('text','') for b in content if isinstance(b,dict) and any(marker in b.get('text','') for marker in ('{"pending"','{"direct_write"')))
                 assert blocks
                 text=blocks[-1]
-                return json.JSONDecoder().raw_decode(text[text.index('{"pending"'):])[0]
+                start=min(text.index(marker) for marker in ('{"pending"','{"direct_write"') if marker in text)
+                return json.JSONDecoder().raw_decode(text[start:])[0]
             confirmed=latest_context(h.model.requests[-1])
             assert confirmed['receipt']['text']=='已创建成功。' and confirmed['pending'] is None
             await h.submit('现在帮我回答一个新问题')

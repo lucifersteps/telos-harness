@@ -6,6 +6,7 @@ from datetime import datetime
 from http.server import BaseHTTPRequestHandler,ThreadingHTTPServer
 import json
 import logging
+import re
 import os
 from pathlib import Path
 import secrets
@@ -83,7 +84,7 @@ class Channel(ScheduledDelivery):
                 self.known_ref(session)
                 with self.business.db() as db:
                     db.execute("INSERT OR IGNORE INTO messages(id,session,input,reply,delivered) VALUES(?,?,?,'',1)",(message['id'],session,message.get('text','')))
-                self.business.active[session]={'key':message['id'],'text':message.get('text',''),'time':datetime.now().astimezone().isoformat()}
+                self.business.active[session]={'key':message['id'],'scheduled':True,'text':message.get('text',''),'time':datetime.now().astimezone().isoformat()}
                 continue
             with self.business.db() as db:row=db.execute('SELECT input FROM messages WHERE id=? AND session=?',(message['id'],session)).fetchone()
             if row is None:continue  # Native Skill catalogs and other internal contexts are not user approvals.
@@ -91,15 +92,23 @@ class Channel(ScheduledDelivery):
             self.business.active[session]={'key':key,'text':text,'time':datetime.now().astimezone().isoformat()}
             pending=self.business.pending(session)
             control=text.strip() if not message['hasMedia'] else ''
-            if control in {'取消','拒绝','2','/stop'} and (not pending or pending['kind']=='approval' or control!='2'):
+            undo=re.fullmatch(r'撤销(?:\s+([0-9a-f]{12}))?',control)
+            undo_control=bool(undo) or (control=='1' and not pending)
+            if control=='1' and not pending:
+                target=self.business.latest_card_undo(session)
+                receipt=await self.business.undo(session,target) if target else {'status':'deny','text':'当前没有可确认的预览或可用【1】撤销的保存卡片；请说明需要修改的安排，或回复“撤销”撤回最近一次直接保存。'}
+            elif undo:
+                receipt=await self.business.undo(session,undo.group(1) or '')
+            elif control in {'取消','拒绝','2','/stop'} and (not pending or pending['kind']=='approval' or control!='2'):
                 if pending and pending.get('id'):self.business.settle_drafts(session,pending['id'],{'status':'cancelled'})
                 self.business.set_pending(session,None)
-                receipt={'status':'declined','text':'已取消当前操作。'}
+                receipt={'status':'declined','text':'已取消当前待处理操作。' if pending else '没有待取消的预览；撤销已保存的安排请回复“撤销”。'}
             elif control in {'1','确认','同意'} and (not pending or pending['kind']=='approval'):
                 receipt=await self.business.confirm(session)
             else:
                 if pending and not pending.get('executing'):self.business.set_pending(session,None)
                 continue
+            receipt['control']=undo_control or control not in {'1','确认','同意'}
             self.business.active[session]['receipt']=receipt
             self.business.save_reply(key,receipt['text'])
         return {}
@@ -135,7 +144,7 @@ class Channel(ScheduledDelivery):
                 receipts=[r[2] for r in rows if r[2] and not r[1]]
                 # A control-only turn with no further tool work reports its actual
                 # receipt, not an additional model promise to perform the same save.
-                control_only=receipts and all(r[3].strip() in {'1','确认','同意','2','取消','拒绝','/stop'} for r in rows)
+                control_only=receipts and all(r[3].strip() in {'1','确认','同意','2','取消','拒绝','/stop'} or re.fullmatch(r'撤销(?:\s+[0-9a-f]{12})?',r[3].strip()) for r in rows)
                 if control_only and not any(e.get('type')=='tool/result' for e in events):
                     reply='\n\n'.join(dict.fromkeys(receipts))
                 else:reply=self.business.render(session,reply)

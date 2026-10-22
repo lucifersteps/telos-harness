@@ -212,56 +212,85 @@ class AppleService:
                                   "radius": reference.get("radius", 200)})
 
     def mutate(self, action: str, args: dict[str, Any], operation_id: str) -> dict[str, Any]:
-        # The kernel lock serializes our operations; the native helper checks the
-        # baseline again after approval, immediately before the EventKit save.
         with self.locked():
-            if not operation_id:
-                raise ValueError("写操作必须包含持久化工具调用编号。")
+            return self._mutate_locked(action, args, operation_id)
+
+    def _mutate_locked(self, action, args, operation_id):
+        if not operation_id:
+            raise ValueError("写操作必须包含持久化工具调用编号。")
+        with self.database() as db:
+            existing = db.execute("SELECT status, result FROM operations WHERE id = ?", (operation_id,)).fetchone()
+        if existing:
+            if existing[0] == "completed":
+                return {k:v for k,v in json.loads(existing[1]).items() if k!="_undo"}
+            raise AppleNativeError("先前写入结果未知，请查询 Apple 核实后再决定，不能直接重试。", code="unknown_write")
+        with self.database() as db:
+            pending = db.execute("SELECT id FROM operations WHERE status = 'pending' LIMIT 1").fetchone()
+        if pending:
+            raise AppleNativeError("存在结果未知的写入，所有新写入已暂停。请核实 Apple 数据并用 resolve-write 处理。", code="unknown_write")
+        request = {**self.scope(start=args.get("start", ""), end=args.get("end", "")),
+                   "kind": args["kind"], "fields": args.get("fields", {})}
+        item = None
+        if action != "create":
+            item = self.client.request("detail", {**request, "id": args["id"]})["item"]
+            if revision(item) != args["expected_revision"]:
+                raise AppleNativeError("对象已被修改；操作未执行，请重新查询并确认。", code="conflict")
+            request.update(id=args["id"], expected=item)
+        if args.get("recurrence_scope"):
+            request["recurrence_scope"] = args["recurrence_scope"]
+        for key in ("expected_references","attachment_fingerprints"):
+            if args.get(key): request[key] = args[key]
+        from telos.tools.apple.features import attachment_fingerprints
+        if args.get("attachment_fingerprints",{}) != attachment_fingerprints(request["fields"]):
+            raise AppleNativeError("附件在预览后发生变化，请重新确认。",code="conflict")
+        if args.get("expected_destination"):
+            request["expected_destination"] = args["expected_destination"]
+        with self.database() as db:
+            from telos.tools.apple.direct import inverse_fields
+            inverse = inverse_fields(action, args["kind"], request["fields"], item)
+            journal = {"action":action,"kind":args["kind"],"before":item,"inverse":inverse}
+            db.execute("INSERT INTO operations VALUES (?, 'pending', ?)", (operation_id, canonical({"_undo":journal})))
+        try:
+            result = self.client.request(action, request)
+        except AppleNativeError as error:
+            # These failures are known to occur before the native save.
+            if error.code in {"conflict", "permission_denied", "not_found", "read_only", "scope_missing",
+                              "invalid_date", "invalid_title", "invalid_kind", "invalid_field", "invalid_fields",
+                              "invalid_url", "unsupported_field", "recurrence_scope_required",
+                              "unsupported_private_feature", "invalid_color", "invalid_icon", "duplicate_title",
+                              "nonempty_list", "account_mismatch", "restricted_scope"}:
+                with self.database() as db:
+                    db.execute("DELETE FROM operations WHERE id = ?", (operation_id,))
+            raise
+        result = {"saved": True, **result}
+        with self.database() as db:
+            db.execute("UPDATE operations SET status = 'completed', result = ? WHERE id = ?", (canonical({**result,"_undo":{**journal,"after":result.get("item")}}), operation_id))
+        # EventKit write succeeded even if a subsequent refresh fails.
+        return result
+
+    def undo(self, operation_id):
+        """Only called for an explicit user undo command bound to a session receipt."""
+        undo_id = operation_id + ":undo"
+        with self.locked():
             with self.database() as db:
-                existing = db.execute("SELECT status, result FROM operations WHERE id = ?", (operation_id,)).fetchone()
-            if existing:
-                if existing[0] == "completed":
-                    return json.loads(existing[1])
-                raise AppleNativeError("先前写入结果未知，请查询 Apple 核实后再决定，不能直接重试。", code="unknown_write")
-            with self.database() as db:
-                pending = db.execute("SELECT id FROM operations WHERE status = 'pending' LIMIT 1").fetchone()
-            if pending:
-                raise AppleNativeError("存在结果未知的写入，所有新写入已暂停。请核实 Apple 数据并用 resolve-write 处理。", code="unknown_write")
-            request = {**self.scope(start=args.get("start", ""), end=args.get("end", "")),
-                       "kind": args["kind"], "fields": args.get("fields", {})}
-            if action != "create":
-                item = self.client.request("detail", {**request, "id": args["id"]})["item"]
-                if revision(item) != args["expected_revision"]:
-                    raise AppleNativeError("对象已被修改；操作未执行，请重新查询并确认。", code="conflict")
-                request.update(id=args["id"], expected=item)
-            if args.get("recurrence_scope"):
-                request["recurrence_scope"] = args["recurrence_scope"]
-            for key in ("expected_references","attachment_fingerprints"):
-                if args.get(key): request[key] = args[key]
-            from telos.tools.apple.features import attachment_fingerprints
-            if args.get("attachment_fingerprints",{}) != attachment_fingerprints(request["fields"]):
-                raise AppleNativeError("附件在预览后发生变化，请重新确认。",code="conflict")
-            if args.get("expected_destination"):
-                request["expected_destination"] = args["expected_destination"]
-            with self.database() as db:
-                db.execute("INSERT INTO operations VALUES (?, 'pending', '{}')", (operation_id,))
-            try:
-                result = self.client.request(action, request)
-            except AppleNativeError as error:
-                # These failures are known to occur before the native save.
-                if error.code in {"conflict", "permission_denied", "not_found", "read_only", "scope_missing",
-                                  "invalid_date", "invalid_title", "invalid_kind", "invalid_field", "invalid_fields",
-                                  "invalid_url", "unsupported_field", "recurrence_scope_required",
-                                  "unsupported_private_feature", "invalid_color", "invalid_icon", "duplicate_title",
-                                  "nonempty_list", "account_mismatch", "restricted_scope"}:
-                    with self.database() as db:
-                        db.execute("DELETE FROM operations WHERE id = ?", (operation_id,))
-                raise
-            result = {"saved": True, **result}
-            with self.database() as db:
-                db.execute("UPDATE operations SET status = 'completed', result = ? WHERE id = ?", (canonical(result), operation_id))
-            # EventKit write succeeded even if a subsequent refresh fails.
-            return result
+                previous = db.execute("SELECT status,result FROM operations WHERE id=?", (undo_id,)).fetchone()
+                original = db.execute("SELECT status,result FROM operations WHERE id=?", (operation_id,)).fetchone()
+            if previous:
+                if previous[0] != "completed" or json.loads(previous[1]).get("saved") is not True:
+                    raise AppleNativeError("上次撤销结果未知，请先核实；不会重复执行。",code="unknown_write")
+                return {"saved":True,"already_undone":True}
+            if not original or original[0] != "completed":
+                raise AppleNativeError("没有可核实的保存回执，不能自动撤销。",code="unknown_write")
+            journal = json.loads(original[1]).get("_undo", {})
+            after, inverse = journal.get("after"), journal.get("inverse")
+            if not after or inverse is None:
+                raise AppleNativeError("此操作无法可靠自动撤销，请查询后修改。",code="unsupported_field")
+            args = {"kind":journal["kind"], "id":after["id"], "expected_revision":revision(after),
+                    "fields":inverse if journal["action"]=="update" else {}}
+            # mutate performs fresh detail and a native expected-object check, including
+            # external edits, changed children, alarms and identifiers; no blind overwrite.
+            result = self._mutate_locked("update" if journal["action"]=="update" else "delete", args, undo_id)
+            return {**result,"undone":True}
 
     async def context_refresh(self) -> str:
         # 每个会话接收自己本轮读取的结构化证据，不共享可变的最新快照。

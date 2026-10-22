@@ -49,6 +49,7 @@ def system_prompt(config):
     from settings import runtime_options
     rules = (ROOT / 'personal_prompt.md').read_text()
     enabled=runtime_options(config)['tools']
+    rules+='\n当前写入模式：'+('直接写入（受保护操作仍确认）' if runtime_options(config)['direct_write'] else '每次预览确认')+'。\n'
     rules+='\n当前工具开关：Apple '+('开启' if enabled['apple'] else '关闭')+'；百度地图 '+('开启' if enabled['maps'] else '关闭')+'。关闭的能力不可调用，不得声称已查询或写入。\n'
     persona = persona_text(config)
     if not persona:

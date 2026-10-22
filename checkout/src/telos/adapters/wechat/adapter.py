@@ -998,11 +998,11 @@ def _approval_message_bubbles(request: ApprovalRequest) -> list[str]:
     return [_approval_markdown_message(request)]
 
 
-def _approval_markdown_message(request: ApprovalRequest) -> str:
+def _approval_markdown_message(request: ApprovalRequest, *, saved: bool = False) -> str:
     language, body = _approval_code_block(request)
     summary = _approval_summary(request.detail)
     title = request.action if summary else f"{request.tool_name} Approval"
-    instruction = (
+    instruction = "回复【1】撤销；需要修改时直接回复修改内容" if saved else (
         "回复【1】确认，回复【2】取消\n"
         "需要修改时直接回复修改内容\n"
         f"（等待确认：{_approval_timeout_short_label(request.timeout_seconds)}）"

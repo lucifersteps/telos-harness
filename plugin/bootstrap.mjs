@@ -19,8 +19,9 @@ export function commandFor(profile,args) {
   if(profile==='desktop')return 'desktop'; // Desktop owns its host/port and UI arguments.
   if(!args.length)return 'serve';
   if(args.length===1&&commands[args[0]])return commands[args[0]];
+  if(args.length===2&&args[0]==='--telos-direct-write'&&['on','off'].includes(args[1]))return 'configure';
   if(args.length===2&&['--telos-persona','--telos-persona-file'].includes(args[0]))return 'configure';
-  throw new Error('支持 --telos-setup、--telos-login、--telos-authorize、--telos-status、--telos-persona default|liman、--telos-persona-file 文件路径；无参数启动微信通道。');
+  throw new Error('支持 --telos-setup、--telos-login、--telos-authorize、--telos-status、--telos-direct-write on|off、--telos-persona default|liman、--telos-persona-file 文件路径；无参数启动微信通道。');
 }
 export async function readConfig(paths) {
   try {
@@ -54,7 +55,7 @@ async function run(ctx) {
       await runtime(ctx,paths,config,()=>ctx.get('appExit')(1));return;
     }
     const args=ctx.cmdlineArgs.get();
-    const input=command==='configure'?(args[0]==='--telos-persona'?{persona:args[1]}:{persona:'custom',persona_file:args[1]}):undefined;
+    const input=command==='configure'?(args[0]==='--telos-direct-write'?{direct_write:args[1]==='on'}:args[0]==='--telos-persona'?{persona:args[1]}:{persona:'custom',persona_file:args[1]}):undefined;
     const result=await component(ctx,paths,command,{},input).done;
     if(command==='setup') {
       console.log('Telos 配置已保存；模型、凭据和语音请在 DSH 配置。接着运行 --telos-login 和 --telos-authorize。');

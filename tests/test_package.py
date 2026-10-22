@@ -97,7 +97,7 @@ class Installed:
         helper=path/'fake apple'
         helper.write_text(f'#!{sys.executable}\nimport json,sys,urllib.request\nb=json.dumps({{"action":sys.argv[1],"args":json.load(sys.stdin)}}).encode()\nr=urllib.request.urlopen(urllib.request.Request({self.services.url+"/apple"!r},data=b,headers={{"Content-Type":"application/json"}}))\nprint(r.read().decode())\n')
         helper.chmod(0o700)
-        config=read_config(self.data);config['apple_helper']=str(helper);config['wechat']['base_url']=self.services.url;config['wechat']['cdn_base_url']=self.services.url;write_config(self.data,config)
+        config=read_config(self.data);config['direct_write']=False;config['apple_helper']=str(helper);config['wechat']['base_url']=self.services.url;config['wechat']['cdn_base_url']=self.services.url;write_config(self.data,config)
     def install(self,archive):
         result=subprocess.run([*self.command,'plugin','--profile','telos','add','telos-harness@file:'+str(archive),'--offline'],env=self.env,cwd=self.path,capture_output=True,text=True,timeout=90)
         assert result.returncode==0,result.stdout+result.stderr

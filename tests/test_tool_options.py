@@ -30,7 +30,7 @@ def test_disabled_tools_never_touch_external_services(tmp_path):
 def test_disable_restart_reenable_confirm_writes_once(tmp_path):
     async def run():
         native=Apple();apple=AppleService(native,tmp_path/'apple')
-        b=Business(tmp_path,apple);b.active['s']={'key':'request','text':'创建会议'}
+        b=Business(tmp_path,apple,{"direct_write":False});b.active['s']={'key':'request','text':'创建会议'}
         await b.execute('s','draft','personalPlan',draft())
         pending=b.pending('s');pending['delivered']=True;b.set_pending('s',pending)
         off=Business(tmp_path,apple,{'tools':{'apple':False}})

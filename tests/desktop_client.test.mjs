@@ -73,3 +73,12 @@ test('model and tool changes persist only nonsecret choices, using apply',async(
   assert.deepEqual(p.credentialWrites,[{ref:'TEST_API_KEY',value:'fictional-model-key'}]);
   assert.ok(!JSON.stringify(p.requests).includes('fictional-model-key'));
 });
+
+test('direct write defaults on and can be disabled through the plugin UI',async()=>{
+  const p=await mounted();let tree=p.render();
+  const toggle=p.find(tree,n=>n.props['aria-label']==='直接写入');
+  assert.equal(toggle.props.checked,true);
+  toggle.props.onChange({target:{checked:false}});
+  tree=p.render();await p.find(tree,n=>n.type==='button'&&n.children.includes('保存并应用')).props.onClick();
+  assert.equal(JSON.parse(p.requests.at(-1).options.body).direct_write,false);
+});
