@@ -18,7 +18,7 @@ ROOT=Path(__file__).resolve().parents[1]
 def run(*args):subprocess.run([str(a) for a in args],check=True,cwd=ROOT)
 
 def main():
-    parser=argparse.ArgumentParser();parser.add_argument('--version',default='0.4.12');parser.add_argument('--reuse-components',action='store_true')
+    parser=argparse.ArgumentParser();parser.add_argument('--version',default='0.4.13');parser.add_argument('--reuse-components',action='store_true')
     parser.add_argument('--reuse-apple',action='store_true',help='Preserve the existing signed Apple component while rebuilding Python')
     parser.add_argument('--sign-identity',default='-',help='Developer ID Application identity; - is local ad-hoc validation only')
     args=parser.parse_args()

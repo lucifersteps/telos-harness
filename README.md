@@ -8,13 +8,13 @@
 
 **有了 Telos，你可以直接在微信里，把工作和生活中的安排发给助手。**
 
-想到什么就说什么，也可以发送截图或语音，不必先整理成标准格式。让 AI 帮你梳理事务、补齐信息，再按你的确认保存到 Apple 日历和提醒事项。新增安排、调整时间、查看待办，用日常聊天的方式就能完成，减少在微信和管理 App 之间反复切换。
+想到什么就说什么，也可以发送截图或语音，不必先整理成标准格式。让 AI 帮你梳理事务、补齐信息，将明确交代的单项安排直接保存到 Apple 日历和提醒事项，并发回完整卡片。新增安排、调整时间、查看待办，用日常聊天的方式就能完成，减少在微信和管理 App 之间反复切换。
 
 手机上无需再装一个任务管理 App，也不用重新搭建一套复杂的管理体系。你继续使用熟悉的微信，安排仍保存在 Apple 日历和提醒事项里。Telos 作为 [DeepSeek Harness](https://www.deepseek.com/en/harness/) 插件运行在 Mac 上，帮你完成中间那些繁琐的操作。
 
 ![Telos 六格漫画：从遗漏安排、反复尝试管理 App，到在微信里发送截图和语音，由 Telos 整理到 Apple 日历与提醒事项，事务虽多依然从容有序。](docs/assets/telos-story.png)
 
-**多一份从容，从 Telos 开始。** [下载安装包](https://github.com/lucifersteps/telos-harness/releases/tag/v0.4.12)，或按下方的[「让 AI 帮你安装」](#让-ai-帮你安装)开始配置。
+**多一份从容，从 Telos 开始。** [下载安装包](https://github.com/lucifersteps/telos-harness/releases/tag/v0.4.13)，或按下方的[「让 AI 帮你安装」](#让-ai-帮你安装)开始配置。
 
 [查看六宫格漫画原图](docs/assets/telos-story.png) · [查看宣传海报（含项目二维码）](docs/assets/telos-poster.png)
 
@@ -28,8 +28,9 @@ Telos 面向使用 **iPhone 和 Mac** 的用户，目前支持 **macOS 14+、App
 
 | 功能 | 支持的操作 | 你可以这样说 |
 | --- | --- | --- |
-| 📅 Apple 日历 | 查询、创建、修改和删除日程 | “看看我明天有哪些安排。”<br>“明天下午三点安排一小时项目讨论。” |
-| ✅ Apple 提醒事项 | 查询、新增、修改、完成和删除待办 | “周五下午五点前提醒我提交报销材料，保存到 Apple 提醒事项。”<br>“把‘买牛奶’标记为已完成。” |
+| 📅 Apple 日历 | 查询、创建、修改和删除日程，设置出行时间，管理日历 | “看看我明天有哪些安排。”<br>“明天下午三点安排一小时项目讨论。” |
+| ✅ Apple 提醒事项 | 查询、新增、修改、完成和删除待办，管理标签 | “周五下午五点前提醒我提交报销材料，保存到 Apple 提醒事项。”<br>“把‘买牛奶’标记为已完成。” |
+| 🗂️ 事项整理 | 管理清单分区、子任务、附件、重复规则与紧急状态 | “给‘提交报销’加上‘工作’标签。”<br>“把这项任务移到‘本周’分区。” |
 | ⏰ 微信定时任务 | 定时发微信，按计划执行查询；支持查看、修改和取消任务 | “十分钟后在微信提醒我休息。”<br>“每天早上九点，把当天日程和未完成事项发给我。” |
 | 🌐 网页搜索与阅读 | 搜索资料、读取公开网页、整理内容 | “查一下这个项目的官方安装文档。”<br>“读一下这个链接，整理主要结论。” |
 | 🗺️ 百度地图 | 查询地点、地址、公交与驾车路线、天气 | “从北京南站到颐和园，坐地铁怎么走？”<br>“查询杭州明天的天气。” |
@@ -39,7 +40,7 @@ Telos 面向使用 **iPhone 和 Mac** 的用户，目前支持 **macOS 14+、App
 | 📄 文件读取 | 按需读取 PDF 文字层、Word（DOCX）、Excel（XLSX）及文本文件 | 发送文件：“把文件中的会议整理成日程草稿。”<br>“总结这份材料的重点。” |
 | 🎭 人设与 Skill | 选择内置或自定义人设，使用 DeepSeek Harness 中适用的 Skill | 在设置中选择“默认助手”或“黎曼”，也可加载自己的提示词文件。 |
 
-**使用说明：** 涉及日历和提醒事项的创建、修改或删除时，Telos 会先展示预览，收到你的文字确认后再执行。地图需要百度 Agent Plan SK，网页需要可用的 DeepSeek Harness 网页服务，图片和语音分别依赖模型视觉能力与语音识别服务。历史回查仅限当前微信会话。
+**使用说明：** 默认直接保存单项新增和可恢复的普通修改，并发送完整卡片；回复【1】撤销，需要修改时直接回复修改内容。删除、批量和复杂操作仍先预览确认。可在插件页关闭“直接写入”，恢复每次确认。地图需要百度 Agent Plan SK，网页需要可用的 DeepSeek Harness 网页服务，图片和语音分别依赖模型视觉能力与语音识别服务。历史回查仅限当前微信会话。
 
 **文件读取：** 支持在微信发送 PDF、Word（DOCX）、Excel（XLSX）和文本文件。复用 DeepSeek Harness 的 Office 技能与工具；PDF 借助 macOS PDFKit 读取文字层，无需另配解析 API Key。桌面版复用内置环境，独立 CLI 需准备 Office 运行环境。格式限制与数据保存方式见[文件读取说明](packaging/README.md#微信文件读取)。
 
@@ -57,11 +58,13 @@ DeepSeek Harness（下文简称 DSH）支持桌面版和 CLI，两种方式使�
 
 安装包自带 Telos 所需的 Python 运行环境和 Apple 组件，无需安装 Python、Homebrew 或 Xcode。选用 Node/CLI 时，仍需要 DSH 对应的 Node.js 运行环境。
 
-**当前版本：0.4.12。** 从 [0.4.12 Release](https://github.com/lucifersteps/telos-harness/releases/tag/v0.4.12) 下载安装包与 SHA256 校验文件。不要把源码 ZIP 当作插件安装包。
+**当前版本：0.4.13。** 从 [0.4.13 Release](https://github.com/lucifersteps/telos-harness/releases/tag/v0.4.13) 下载安装包与 SHA256 校验文件。不要把源码 ZIP 当作插件安装包。
+
+**0.4.13 更新：** 默认直接写入、完整保存卡片与回复【1】撤销；新增提醒事项标签、分区、子任务、附件等整理能力，以及日历管理、出行时间和会议详情读取。新 Apple 扩展已在 macOS 26.2 验证，其他 macOS 版本的扩展能力尚未实机验证。
 
 当前安装包使用 ad-hoc 签名，尚未完成 Developer ID 公证及另一台实体 Mac 的首次安装验证；如遇系统拦截，见 [排障指南](docs/troubleshooting.md#macos-blocked)。
 
-**插件市场安装来源：** 使用 [0.4.12 预构建安装包](https://github.com/lucifersteps/telos-harness/releases/download/v0.4.12/telos-harness-0.4.12-macos-arm64.tgz)，并核对同一 Release 的 SHA256 文件。仓库根目录的 `package.json` 声明正式插件元数据；源码不包含已编译的 Python 和 Apple 组件，不能直接用 `github:lucifersteps/telos-harness` 代替安装包。市场安装完成后，仍需完成模型配置、微信扫码和 Apple 授权。
+**插件市场安装来源：** 使用 [0.4.13 预构建安装包](https://github.com/lucifersteps/telos-harness/releases/download/v0.4.13/telos-harness-0.4.13-macos-arm64.tgz)，并核对同一 Release 的 SHA256 文件。仓库根目录的 `package.json` 声明正式插件元数据；源码不包含已编译的 Python 和 Apple 组件，不能直接用 `github:lucifersteps/telos-harness` 代替安装包。市场安装完成后，仍需完成模型配置、微信扫码和 Apple 授权。
 
 ## 让 AI 帮你安装
 
@@ -86,7 +89,7 @@ DeepSeek Harness（下文简称 DSH）支持桌面版和 CLI，两种方式使�
 1. 从 [DSH 官网](https://www.deepseek.com/en/harness/) 安装兼容版本，打开应用。
 2. 从 [Telos Releases](https://github.com/lucifersteps/telos-harness/releases) 下载与你所用文档版本匹配的 `telos-harness-版本-macos-arm64.tgz`，按 [下载与校验](docs/install-for-ai.md#download) 核对文件。
 3. 在 DSH 的“插件 → 添加插件”安装该文件并启用，打开 Telos 页面。
-4. 选择已有模型或跟随 DSH 默认模型；也可以使用页面中的账号登录或 API 模型配置。“测试连接”成功后，保留 Apple 开关开启，百度地图按需开启，点击“保存并应用”。
+4. 选择已有模型或跟随 DSH 默认模型；也可以使用页面中的账号登录或 API 模型配置。“测试连接”成功后，保留 Apple 开关开启，按需选择“直接写入”和百度地图，点击“保存并应用”。
 5. 在 Telos 页面完成微信扫码，点击“授权日历与提醒事项”，在 macOS 弹窗中分别允许两项权限。
 6. 点击“启动 Telos”。用扫码的微信向机器人发送“你好，请回复收到”，然后试试“查看今天的日程和未完成提醒事项”。
 
@@ -105,7 +108,7 @@ CLI 与桌面使用同一个 `.tgz` 安装包。**CLI 必须保持运行**；关
 | 功能 | 配置方式 |
 | --- | --- |
 | 微信聊天 | DSH 模型连接、微信扫码；已有模型可直接复用，不一定要新增 API Key |
-| Apple 日历与提醒事项 | 默认开启，两项 macOS 权限均需本人授权；写入前仍需文字确认 |
+| Apple 日历与提醒事项 | 默认开启，两项 macOS 权限均需本人授权；默认直接写入，删除、批量等仍确认 |
 | 百度地图 | 可选，在 [百度地图 Agent Plan](https://lbs.baidu.com/apiconsole/agentplan) 登录并获取 SK，填入 Telos 的“百度地图 Token” |
 | 语音消息 | 可选，在 DSH 中启用并准备语音识别服务；Telos 不另行下载语音模型 |
 | 网页搜索与读取 | 复用 DSH 的网页服务和凭据；模型聊天可用并不代表搜索后端已就绪 |
@@ -130,7 +133,7 @@ CLI 与桌面使用同一个 `.tgz` 安装包。**CLI 必须保持运行**；关
 
 需要验证定时任务时，可在微信中创建“一分钟后提醒我安装测试完成”的一次性任务，并保持电脑唤醒、DSH 和 Telos 运行。
 
-开发版已加入可关闭的“直接写入”模式：普通单项安排直接保存，可在微信回复“撤销”；删除、批量等操作仍需确认。新老用户升级该开发版后默认开启，详见 [写入模式说明](docs/install-for-ai.md#direct-write)。此功能尚未包含在正式 0.4.12 安装包中。
+0.4.13 默认开启“直接写入”，包括升级后未设置该选项的旧配置；显式关闭过的配置保持关闭。保存卡片中的【1】表示撤销，待确认卡片中的【1】仍表示确认。详见 [写入模式说明](docs/install-for-ai.md#direct-write)。
 
 ## 日常使用、升级与帮助
 

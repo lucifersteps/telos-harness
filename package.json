@@ -1,6 +1,6 @@
 {
   "name": "telos-harness",
-  "version": "0.4.12",
+  "version": "0.4.13",
   "description": "WeChat personal assistant for DeepSeek Harness, with Apple Calendar and Reminders integration on Apple Silicon Macs.",
   "license": "MIT",
   "author": "lucifersteps",

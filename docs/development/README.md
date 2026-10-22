@@ -32,7 +32,7 @@ bash run-validation.sh
 构建需要 Xcode Command Line Tools 和上述 Python 依赖：
 
 ```sh
-.venv/bin/python packaging/build.py --version 0.4.12
+.venv/bin/python packaging/build.py --version 0.4.13
 ```
 
 Apple 权限授予独立的「Telos Apple」，桌面版和 CLI 使用同一路径。本版为 ad-hoc 签名：组件内容更新后可能需要重新授权，本机已验证这一限制。正式分发可通过构建参数 `--sign-identity "Developer ID Application: …"` 使用稳定签名；当前尚未完成 Developer ID 签名、公证及另一台实体 Mac 验证。Telos 原创代码采用 MIT；第三方组件遵循各自许可，见根目录 LICENSE、THIRD_PARTY_NOTICES.md 与安装包 licenses/。
@@ -47,6 +47,6 @@ Apple 权限授予独立的「Telos Apple」，桌面版和 CLI 使用同一路�
 
 标签开发回归：`tests/business_tests/test_tags.py` 覆盖字段、预览和冲突；`tests/test_tags.py` 使用实际 CLI/Desktop Host 与模拟服务验证确认和重启。`TELOS_TAGS_LIVE=1` 显式启用 `tests/test_tags_live.py`，使用刚编译并获用户授权的 Apple 组件，只创建、修改、清理唯一命名的临时测试清单与事项。默认不会写入真实 Apple 数据。可用 `TELOS_TAGS_HELPER` 指定测试组件，不能指向不含标签能力的旧版本。
 
-Apple 扩展开发版的验证入口：`tests/business_tests/test_extended_apple.py`（参数/预览/筛选）、`tests/test_extended_apple_live.py`（显式 `TELOS_EXTENDED_LIVE=1`，独立已授权测试组件和临时数据）、`tests/test_extended_apple_hosts.py`（桌面/CLI 宿主）。具体范围和版本记录见 [validation.md](validation.md)。
+Apple 扩展能力的验证入口：`tests/business_tests/test_extended_apple.py`（参数/预览/筛选）、`tests/test_extended_apple_live.py`（显式 `TELOS_EXTENDED_LIVE=1`，独立已授权测试组件和临时数据）、`tests/test_extended_apple_hosts.py`（桌面/CLI 宿主）。具体范围和版本记录见 [validation.md](validation.md)。
 
 直接写入回归：`tests/test_direct_write.py` 覆盖策略、幂等、撤销冲突、中断恢复与回执重投；`tests/test_direct_write_hosts.py` 使用隔离 CLI/Desktop Host 验证开关、重启和旧确认流程；`TELOS_DIRECT_LIVE=1` 显式启用 `tests/test_direct_write_live.py`，使用独立已授权 Apple 测试组件和临时数据，不操作现有安排。

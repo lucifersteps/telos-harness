@@ -2,7 +2,7 @@
 
 本指南供能操作用户本机的 AI 执行，也可供用户手动操作。目标是完成微信聊天、默认启用的 Apple 日历与提醒事项配置，并留下可重复的启动方式。只有网页或聊天能力时，请给出对应步骤，由用户执行。
 
-适用版本：Telos **0.4.12**，已验证 DSH **0.2.1-rc.2**，macOS 14+ Apple Silicon。安装其他版本时，应阅读该 Release/tag 对应的文档，不要承诺旧包具有新功能。
+适用版本：Telos **0.4.13**，已验证 DSH **0.2.1-rc.2**，macOS 14+ Apple Silicon。安装其他版本时，应阅读该 Release/tag 对应的文档，不要承诺旧包具有新功能。
 
 ## 从仓库链接开始
 
@@ -13,7 +13,7 @@
 ## 执行约定
 
 - 优先复用已有安装、模型与数据目录。先识别现状，再修改；现有配置只合并必要字段，不整份覆盖。
-- 首次配置默认启用 Apple 日历与提醒事项，并引导两项授权。百度地图和语音可稍后添加。
+- 首次配置默认启用 Apple 日历与提醒事项，并引导两项授权。0.4.13 默认直接保存普通单项安排，升级前说明该变化；用户可在插件页关闭“直接写入”，CLI 见 [写入模式](#direct-write)。百度地图和语音可稍后添加。
 - 由用户本人完成账号登录、凭据输入、微信扫码及 macOS 授权。提供具体页面或本机文件位置；不要要求用户把密钥发到聊天，不打印凭据文件。
 - 环境允许的检查、下载、安装和非敏感配置可连续完成。遇到必须由用户完成的步骤时，说明正在等待什么，收到实际成功状态后继续。
 - 不把“插件文件安装成功”“模型已配置”“微信已登录”“已收到回复”混为一谈。失败时保留已完成步骤，参照 [排障指南](troubleshooting.md) 继续。
@@ -67,20 +67,20 @@ command -v dsh
 
 安装来源：[Telos Releases](https://github.com/lucifersteps/telos-harness/releases)。普通使用者不需要克隆源码、安装 Python 或执行构建脚本。
 
-本指南对应 [0.4.12 Release](https://github.com/lucifersteps/telos-harness/releases/tag/v0.4.12)，附件包含安装包与 SHA256 校验文件。以下是该版已发布的固定附件地址，不依赖 GitHub API、GitHub 账号、`gh`、Git 或 Python。没有现成下载时，在用户 Mac 的终端执行：
+本指南对应 [0.4.13 Release](https://github.com/lucifersteps/telos-harness/releases/tag/v0.4.13)，附件包含安装包与 SHA256 校验文件。以下是该版已发布的固定附件地址，不依赖 GitHub API、GitHub 账号、`gh`、Git 或 Python。没有现成下载时，在用户 Mac 的终端执行：
 
 ```sh
 mkdir -p "$HOME/Downloads"
-TELOS_DOWNLOAD_DIR="$(mktemp -d "$HOME/Downloads/telos-0.4.12.XXXXXX")"
+TELOS_DOWNLOAD_DIR="$(mktemp -d "$HOME/Downloads/telos-0.4.13.XXXXXX")"
 cd "$TELOS_DOWNLOAD_DIR" || exit 1
 curl --fail --location --retry 2 --connect-timeout 20 \
-  --output telos-harness-0.4.12-macos-arm64.tgz \
-  https://github.com/lucifersteps/telos-harness/releases/download/v0.4.12/telos-harness-0.4.12-macos-arm64.tgz || exit 1
+  --output telos-harness-0.4.13-macos-arm64.tgz \
+  https://github.com/lucifersteps/telos-harness/releases/download/v0.4.13/telos-harness-0.4.13-macos-arm64.tgz || exit 1
 curl --fail --location --retry 2 --connect-timeout 20 \
-  --output telos-harness-0.4.12-macos-arm64.tgz.sha256 \
-  https://github.com/lucifersteps/telos-harness/releases/download/v0.4.12/telos-harness-0.4.12-macos-arm64.tgz.sha256 || exit 1
-shasum -a 256 -c telos-harness-0.4.12-macos-arm64.tgz.sha256 || exit 1
-TELOS_ARCHIVE="$TELOS_DOWNLOAD_DIR/telos-harness-0.4.12-macos-arm64.tgz"
+  --output telos-harness-0.4.13-macos-arm64.tgz.sha256 \
+  https://github.com/lucifersteps/telos-harness/releases/download/v0.4.13/telos-harness-0.4.13-macos-arm64.tgz.sha256 || exit 1
+shasum -a 256 -c telos-harness-0.4.13-macos-arm64.tgz.sha256 || exit 1
+TELOS_ARCHIVE="$TELOS_DOWNLOAD_DIR/telos-harness-0.4.13-macos-arm64.tgz"
 ```
 
 每步失败即停止，不安装部分下载的文件。换到新终端时，需要重新设置 `TELOS_ARCHIVE` 为已下载文件的绝对路径。也可让用户从 Release 页面下载这两个同名附件，再在它们所在目录校验。
@@ -89,16 +89,16 @@ TELOS_ARCHIVE="$TELOS_DOWNLOAD_DIR/telos-harness-0.4.12-macos-arm64.tgz"
 
 ```sh
 gh release list --repo lucifersteps/telos-harness --limit 10
-gh release view v0.4.12 --repo lucifersteps/telos-harness --json tagName,assets,url
+gh release view v0.4.13 --repo lucifersteps/telos-harness --json tagName,assets,url
 ```
 
 确认版本存在后，在新建的空下载目录执行：
 
 ```sh
-gh release download v0.4.12 --repo lucifersteps/telos-harness \
-  --pattern 'telos-harness-0.4.12-macos-arm64.tgz' \
-  --pattern 'telos-harness-0.4.12-macos-arm64.tgz.sha256'
-shasum -a 256 -c telos-harness-0.4.12-macos-arm64.tgz.sha256
+gh release download v0.4.13 --repo lucifersteps/telos-harness \
+  --pattern 'telos-harness-0.4.13-macos-arm64.tgz' \
+  --pattern 'telos-harness-0.4.13-macos-arm64.tgz.sha256'
+shasum -a 256 -c telos-harness-0.4.13-macos-arm64.tgz.sha256
 ```
 
 预期结果为文件名后显示 `OK`。失败则停止安装并重新下载。没有 `.sha256` 附件时，可计算 `shasum -a 256 安装包路径` 并与该 Release 附件的 GitHub `digest` 或维护者提供的 SHA256 比较；仅计算本地哈希不算完成校验。两者都没有时，先取得校验值。
@@ -106,14 +106,14 @@ shasum -a 256 -c telos-harness-0.4.12-macos-arm64.tgz.sha256
 检查包内元数据，核对版本、平台与宿主要求：
 
 ```sh
-tar -xOf telos-harness-0.4.12-macos-arm64.tgz package/package.json
-tar -xOf telos-harness-0.4.12-macos-arm64.tgz package/component-manifest.json
+tar -xOf telos-harness-0.4.13-macos-arm64.tgz package/package.json
+tar -xOf telos-harness-0.4.13-macos-arm64.tgz package/component-manifest.json
 ```
 
 应是 `telos-harness`、目标版本、`darwin` / `arm64`，manifest 的 `min_macos` 为 `14`、`harness` 为 `0.2.1rc2`。安装变量使用下载文件的**绝对路径**，不要把示例路径原样执行：
 
 ```sh
-TELOS_ARCHIVE="/absolute/path/telos-harness-0.4.12-macos-arm64.tgz"
+TELOS_ARCHIVE="/absolute/path/telos-harness-0.4.13-macos-arm64.tgz"
 test -f "$TELOS_ARCHIVE"
 ```
 
@@ -148,7 +148,7 @@ open "$TELOS_DSH_APP"
 
 1. **选择模型。** 已有可用配置时选“跟随 DSH 默认模型”或已有 API 模型。没有配置时，通过 Telos 页的 DeepSeek 账号入口登录，再刷新并选择可用的账号模型；登录成功不代表原先选中的 API 模型已改用账号。也可展开“添加其他 API 模型”，填写协议、地址和模型 ID。凭据由用户直接在界面中输入并“保存到 DSH”，需要 DeepSeek API Key 时见下方 [获取模型凭据](#model-key)。
 2. **测试连接。** 点击“测试连接”，成功后继续。该测试发送一条简短模型请求，会产生少量费用；不读取 Apple 数据。账号模型可用不代表 `DEEPSEEK_API_KEY` 或网页搜索后端也已就绪。
-3. **保存选项。** 默认助手即可。保留 Apple 开关开启；没有百度 Token 时关闭地图。点击“保存并应用”。Telos 现有程序默认两类工具均开启，因此应明确保存地图选择。
+3. **保存选项。** 默认助手即可。保留 Apple 开关开启；说明“直接写入”默认开启，可按用户偏好关闭；没有百度 Token 时关闭地图。点击“保存并应用”。Telos 现有程序默认两类工具均开启，因此应明确保存地图选择。
 4. **微信扫码。** 实例未运行时点击扫码登录，用户用自己的微信扫描页面二维码并确认。等待登录成功；二维码过期则重新发起。不要将二维码作为长期凭据保存。
 5. **Apple 授权。** 点击“授权日历与提醒事项”，用户在 macOS 弹窗中分别允许“Telos Apple”访问日历与提醒事项。检查两项状态；若拒绝，按 [权限排障](troubleshooting.md#apple) 补授权。
 6. **启动。** 点击“启动 Telos”，等待页面显示运行中，再执行 [验收](#verify)。
@@ -279,7 +279,7 @@ env DSH_HOME="$HOME/Library/Application Support/Telos Harness" dsh --profile tel
 | 提醒事项读取 | “查看未完成的提醒事项” | 查询成功；没有事项也可以 |
 | 可选定时任务 | “一分钟后提醒我安装测试完成” | 工具返回创建成功，并在保持在线时收到到期消息 |
 
-验收默认只读，不为了测试写入真实日历。用户要验证创建/修改时，先展示具体预览，再等待用户文字确认。
+验收默认只读，不为了测试修改用户的真实安排。用户愿意验证直接写入时，让用户在微信明确要求新增一条唯一命名的临时事项：应收到一张完整保存卡片，再回复 `1` 撤销并确认临时事项已清理。关闭直接写入时应先预览，回复 `1` 确认；不能把这两种卡片的数字含义混淆。
 
 交付时用简短清单说明：安装版本、桌面/CLI 入口、数据目录、如何启动/停止、已通过的检查、仍待用户完成的项。Apple 尚未授权时明确写“聊天已就绪，Apple 待授权”；未测的网页、语音或定时能力不要写成“全部通过”。定时任务要求电脑唤醒且 DSH/Telos 运行。
 
@@ -352,9 +352,9 @@ Telos 只把该路径交给 DSH 原生依赖工具；环境校验、路径返回
 
 
 <a id="direct-write"></a>
-### 开发版：直接写入开关（0.4.13-dev.3 起）
+### 直接写入与撤销（0.4.13 起）
 
-此功能尚未进入正式 0.4.12 安装包。开发版对新老用户默认开启直接写入；升级前请告知用户默认行为变化。
+0.4.13 对新老用户默认开启直接写入；升级前请告知用户默认行为变化。已有配置未设置 `direct_write` 时视为开启；显式设置为 `false` 时继续保留关闭状态。
 
 桌面版在 Telos 插件页的“写入方式”中打开或关闭“直接写入”，再点“保存并应用”。应用时会重启 Telos，保留登录、历史、草稿及回执。关闭后每次写入都先预览确认。
 
@@ -374,3 +374,9 @@ dsh --profile telos
 保存后收到一张完整卡片，底部提示“回复【1】撤销；需要修改时直接回复修改内容”。回复 `1` 撤销当前已投递的保存卡片；待确认预览中的 `1` 仍表示确认。也可发送 `撤销` 撤回最近一次直接保存。当前微信使用文字指令，没有新增可点击的撤销按钮。撤销新增会删除该次新建的对象，撤销修改会恢复所改字段。对象后来被修改/删除时拒绝自动覆盖；重复撤销不会继续回退上一条；最新回复已不是保存卡片时，`1` 不会寻找更早的卡片。已触发通知无法收回，复杂操作不承诺自动回滚。取消尚未保存的预览仍发送 `取消`，已保存对象需用撤销或明确提出修改。
 
 原值与保存结果记录在既有本地操作账本中，不另建任务数据库。不要清空数据目录；撤销依赖保存记录。遇到未知写入/未知撤销结果时先查询核实，不能反复创建或自行重放。
+
+### 0.4.13 的 Apple 扩展能力
+
+提醒事项支持标签读取、添加、替换和清空，以及分区、子任务、图片/网页附件、紧急状态和序号星期重复；提醒事项只支持一个提前提醒。日历支持新建、改名、改色和删除日历容器，以及日程出行时间和会议参与者、忙闲状态等只读信息。日历容器与其中的单条日程是不同对象。复杂操作继续预览确认，标签等可恢复的普通单项修改可直接保存。
+
+示例：“给提交报销加上工作标签”“把准备材料移到本周分区”“为明天的会议设置 30 分钟出行时间”。这些扩展使用 Apple 原生接口，已在 macOS 26.2 验证；其他 macOS 版本的扩展行为仍需验证。出现不支持或读取失败时保留错误，不通过访问 Apple 内部数据库兜底。

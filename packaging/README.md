@@ -1,6 +1,6 @@
 # Telos Harness 插件
 
-0.4.12 适用于 macOS 14+ Apple Silicon、官方 Node/CLI 或官网桌面版 DeepSeek Harness 0.2.1-rc.2。安装包包含 Python 运行环境和编译后的 Apple helper，不需要用户安装 Python、Homebrew 或 Xcode。
+0.4.13 适用于 macOS 14+ Apple Silicon、官方 Node/CLI 或官网桌面版 DeepSeek Harness 0.2.1-rc.2。安装包包含 Python 运行环境和编译后的 Apple helper，不需要用户安装 Python、Homebrew 或 Xcode。
 
 首次使用请先阅读 [项目首页](https://github.com/lucifersteps/telos-harness#readme) 和 [AI 安装指南](https://github.com/lucifersteps/telos-harness/blob/main/docs/install-for-ai.md)，遇到问题查看 [排障指南](https://github.com/lucifersteps/telos-harness/blob/main/docs/troubleshooting.md)。本文保留详细配置与功能说明；安装旧版本时请阅读对应 tag 的文档。
 
@@ -20,13 +20,13 @@ Telos 只提供微信收发、Apple/百度地图工具、随包 Skill 内容、�
 
 ## 桌面版
 
-1. 在“插件 → 添加插件”安装 `telos-harness-0.4.12-macos-arm64.tgz` 并启用。
+1. 在“插件 → 添加插件”安装 `telos-harness-0.4.13-macos-arm64.tgz` 并启用。
 2. 在 Telos 页选择模型：跟随 DSH 默认模型、使用 DeepSeek 账号、选择已有 API 模型，或展开“添加其他 API 模型”。账号登录直接打开 DSH 原生入口；API 模型支持 OpenAI Chat Completions、Responses 与 Anthropic Messages 协议。
 3. 在页面输入模型 API Key 或百度 Token，点击“保存到 DSH”。凭据直接调用 DSH credentials 服务，不经过 Telos 后端、不进入 Telos 配置或聊天，也不回显已存密钥。添加的 API Provider 通过 DSH settings 持久化；微信独立模型选择不会改变宿主默认模型。无模型列表时保存 Key 后刷新目录，也可手动填写准确的模型 ID。
 4. 选择微信人设，保留 Apple 开启，百度地图按需开启，点击“保存并应用”。运行中应用配置会短暂重启 Telos，保留历史、待确认操作和防重复写入记录。
 5. 微信扫码登录，授权 Apple 日历与提醒事项，再点击“启动 Telos”；以后打开应用或重新启用插件会恢复已登录实例。重新扫码和授权前需停止 Telos。暂不授权时可先验证聊天，并将 Apple 标为待授权。
 
-“测试连接”只向所选模型发送一句测试文字，不加载人设、聊天或 Apple 数据，会产生少量模型调用费用。百度功能仍需单独的 `BAIDU_MAP_AUTH_TOKEN`，DeepSeek 账号不包含百度授权。关闭 Apple 会停止后台读取、撤下业务工具并拒绝确认写入；关闭地图会撤下地图工具与随包 Skill 目录。宿主另行安装的 Skill 仍归 DSH 管理，但不能绕过已关闭的执行工具。重新开启不会自动执行草稿，写入仍需用户确认。
+“测试连接”只向所选模型发送一句测试文字，不加载人设、聊天或 Apple 数据，会产生少量模型调用费用。百度功能仍需单独的 `BAIDU_MAP_AUTH_TOKEN`，DeepSeek 账号不包含百度授权。关闭 Apple 会停止后台读取、撤下业务工具并拒绝确认写入；关闭地图会撤下地图工具与随包 Skill 目录。宿主另行安装的 Skill 仍归 DSH 管理，但不能绕过已关闭的执行工具。重新开启不会自动执行旧草稿；新请求按当前写入模式处理。
 
 百度凭据获取入口是 [百度地图 Agent Plan](https://lbs.baidu.com/apiconsole/agentplan)：登录百度账号，按页面指引获取 **SK（Service Key）**，填入桌面的“百度地图 Token”或 CLI 的 `BAIDU_MAP_AUTH_TOKEN`。普通地图 Web API、JavaScript API 或 MCP 的 AK 不适用于 Telos 这条接口。无需另外安装百度 MCP；额度与收费以官方页面为准。保存凭据并开启地图后，用一次明确地点查询验证实际调用；详细步骤见 [百度地图配置指南](https://github.com/lucifersteps/telos-harness/blob/main/docs/install-for-ai.md#baidu)。
 
@@ -67,7 +67,7 @@ BAIDU_MAP_AUTH_TOKEN=填写自己的地图令牌
 安装包必须先下载并校验，下面 `/path/to/` 替换为实际绝对路径。安装并运行：
 
 ```sh
-dsh plugin --profile telos add telos-harness@file:/path/to/telos-harness-0.4.12-macos-arm64.tgz --offline
+dsh plugin --profile telos add telos-harness@file:/path/to/telos-harness-0.4.13-macos-arm64.tgz --offline
 dsh --profile telos --telos-setup
 dsh --profile telos --telos-login
 dsh --profile telos --telos-authorize
@@ -102,9 +102,9 @@ dsh --profile telos
 
 状态页分别显示两项权限。若此前选择了拒绝，请在「系统设置 → 隐私与安全性 → 日历 / 提醒事项」中允许 Telos Apple，再检查状态；拒绝后系统未必重复弹窗。错误信息会区分权限不足、系统返回错误和等待超时。
 
-授权、查询和确认后的写入统一由 LaunchServices 启动该应用；每次请求完成后退出，不安装常驻服务。请求内容通过仅当前用户可读写的临时文件传递，结束后清理，应用有最长运行时间。写入仍经过原有确认和账本；若执行结果未知，不自动重放。
+授权、查询和写入统一由 LaunchServices 启动该应用；每次请求完成后退出，不安装常驻服务。请求内容通过仅当前用户可读写的临时文件传递，结束后清理，应用有最长运行时间。写入遵循当前直接写入/确认策略，并保留原有操作账本；若执行结果未知，不自动重放。
 
-当前开发包使用 ad-hoc 签名。本机验证：重启和升级时保持同一个已签名 Apple 组件，可保留授权；组件内容与签名改变后，系统重新要求授权。更换本次测试组件与正式安装包也可能需要再次授权。这属于代码身份变化，不能只凭相同应用名称保证授权延续。正式分发应使用稳定的 Developer ID 签名并完成公证；目前没有完成该分发验证。不要重置系统权限数据库来绕过授权。
+当前安装包使用 ad-hoc 签名。本机验证：重启和升级时保持同一个已签名 Apple 组件，可保留授权；组件内容与签名改变后，系统重新要求授权。更换本次测试组件与正式安装包也可能需要再次授权。这属于代码身份变化，不能只凭相同应用名称保证授权延续。正式分发应使用稳定的 Developer ID 签名并完成公证；目前没有完成该分发验证。不要重置系统权限数据库来绕过授权。
 
 ## 微信人设
 
@@ -134,13 +134,13 @@ dsh --profile telos --telos-persona-file "/absolute/path/my-persona.md"
 
 升级只替换插件文件；不重新扫码、不覆盖已有业务数据。停止或卸载 Telos 不删除 DSH 的凭据、Skill 或模型。新版本拒绝不支持的配置版本。插件不安装 launchd 服务、不接管其他微信机器人。
 
-Apple 写入仍须用户文字确认、预览送达与版本校验，并保留防重复写入账本。图片交给 DSH 原生附件和模型视觉能力；语音经 Telos 下载、解密并转为 WAV 后调用 DSH 已配置的识别服务。识别失败不猜测音频内容，语音不能代替文字确认。Telos 临时媒体处理后删除，进入 DSH 的图片保留遵循其原生规则。
+普通单项新增/修改默认直接写入并回执，删除、批量及复杂操作仍要求预览送达和文字确认；所有写入保留版本校验和防重复写入账本。图片交给 DSH 原生附件和模型视觉能力；语音经 Telos 下载、解密并转为 WAV 后调用 DSH 已配置的识别服务。识别失败不猜测音频内容，语音不能代替文字确认。Telos 临时媒体处理后删除，进入 DSH 的图片保留遵循其原生规则。
 
 安装包包含可选的通用黎曼人设，不含个人密钥、微信状态、个人资料或历史。当前为 ad-hoc 签名，尚未做 Developer ID 公证或另一台实体 Mac 验证。现有微信机器人不会自动切换。
 
 ## 微信定时任务
 
-使用 `schedule_create`、`schedule_list`、`schedule_update`、`schedule_delete` 管理当前微信会话的任务。支持延迟、指定时间、固定间隔、每日、每周和 cron；日历规则使用明确时区。任务触发后仍通过原来的模型和 Telos 工具执行，并将回复送回原微信会话。创建 Apple 日历/提醒事项仍需原有人工确认，定时消息不能代替确认。
+使用 `schedule_create`、`schedule_list`、`schedule_update`、`schedule_delete` 管理当前微信会话的任务。支持延迟、指定时间、固定间隔、每日、每周和 cron；日历规则使用明确时区。任务触发后仍通过原来的模型和 Telos 工具执行，并将回复送回原微信会话。定时消息触发的 Apple 写入仍需人工确认，不使用直接写入模式。
 
 插件在两种宿主上均挂载独立的 DSH 原生调度服务，沿用原生规则、存储 schema、持久化和到期投递。只为微信会话提供恢复适配；已保存的账号或允许接收人变化时，拒绝恢复或向旧接收人发送。无需额外安装 Web 服务，也无需调度 API Key。原生存储域为 `telos_schedule_<业务目录哈希>`，存于 DSH 的 storage backend；业务目录和 DSH_HOME 应保持稳定。微信任务通过聊天管理，与桌面普通会话任务列表隔离。
 
@@ -172,7 +172,7 @@ Agent 通过 `user_memory` 的 read/write 维护小型 Markdown 文件；write �
 
 原件以内容哈希命名，保存在 `$TELOS_HOME/users/<用户哈希>/documents/<会话哈希>/`，不另建文档索引或会话状态库；临时下载目录处理后删除。备份时包含原件目录；清理后无法继续读取这些文件，已进入 DSH 历史的内容仍遵循宿主的历史保留规则。
 
-本次增加了微信 Agent 的原生 `bash`、`read`、`read_image` 能力。执行遵循 DSH 的沙箱与授权，不启用后台任务，也不自动扩大权限；原生文件沙箱主要限制写入，并不保证只能读取附件目录。提示词限定文档处理用途，但这不等于操作系统级的附件隔离。Apple 工具的写入仍走现有预览和文字确认流程；文件内容不能充当确认。文件结果回传微信尚未接入。
+本次增加了微信 Agent 的原生 `bash`、`read`、`read_image` 能力。执行遵循 DSH 的沙箱与授权，不启用后台任务，也不自动扩大权限；原生文件沙箱主要限制写入，并不保证只能读取附件目录。提示词限定文档处理用途，但这不等于操作系统级的附件隔离。Apple 工具按当前写入模式执行；文件内容本身不构成用户的写入要求或确认。文件结果回传微信尚未接入。
 
 ## 发布元数据
 
@@ -181,9 +181,9 @@ Agent 通过 `user_memory` 的 read/write 维护小型 Markdown 文件；write �
 源码克隆不含这些二进制，不支持直接作为用户安装包。插件市场应通过 `tarball` 字段指向 GitHub Release 中的预构建 `.tgz`。`engines.dsh` 只声明已验证的 `0.2.1-rc.2`；扩大范围前需验证新宿主。发布后的附件保持不变，更新通过新版本分发。
 
 
-### 开发版：直接写入开关（0.4.13-dev.3 起）
+### 直接写入与撤销（0.4.13 起）
 
-此功能尚未进入正式 0.4.12 安装包。开发版对新老用户默认开启直接写入；升级前请告知用户默认行为变化。
+0.4.13 对新老用户默认开启直接写入；升级前请告知用户默认行为变化。已有配置未设置 `direct_write` 时视为开启；显式设置为 `false` 时继续保留关闭状态。
 
 桌面版在 Telos 插件页的“写入方式”中打开或关闭“直接写入”，再点“保存并应用”。应用时会重启 Telos，保留登录、历史、草稿及回执。关闭后每次写入都先预览确认。
 
@@ -203,3 +203,7 @@ dsh --profile telos
 保存后收到一张完整卡片，底部提示“回复【1】撤销；需要修改时直接回复修改内容”。回复 `1` 撤销当前已投递的保存卡片；待确认预览中的 `1` 仍表示确认。也可发送 `撤销` 撤回最近一次直接保存。当前微信使用文字指令，没有新增可点击的撤销按钮。撤销新增会删除该次新建的对象，撤销修改会恢复所改字段。对象后来被修改/删除时拒绝自动覆盖；重复撤销不会继续回退上一条；最新回复已不是保存卡片时，`1` 不会寻找更早的卡片。已触发通知无法收回，复杂操作不承诺自动回滚。取消尚未保存的预览仍发送 `取消`，已保存对象需用撤销或明确提出修改。
 
 原值与保存结果记录在既有本地操作账本中，不另建任务数据库。不要清空数据目录；撤销依赖保存记录。遇到未知写入/未知撤销结果时先查询核实，不能反复创建或自行重放。
+
+## 0.4.13 Apple 扩展
+
+新增提醒事项标签、分区、子任务、图片/网页附件、紧急状态、序号星期重复与组合筛选；提醒事项只支持一个提前提醒。新增日历容器管理、日程出行时间及会议详情只读字段。复杂操作仍需确认。扩展接口已在 macOS 26.2 实机验证，其他 macOS 版本尚未验证；不恢复旧任务数据库、不直接访问 Apple 内部 SQLite。
