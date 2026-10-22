@@ -21,6 +21,9 @@ from telos.tools.apple.service import AppleService
 from telos.tools.apple.tools import create_apple_tool
 
 
+from telos.tools.apple.tags import validate_tags
+from telos.tools.apple.features import QUERY_FIELDS
+
 NAME = "personalPlan"
 _ACTIONS = ("query", "detail", "create", "update", "delete")
 _FIELD_REQUIREMENTS = {
@@ -53,10 +56,10 @@ def create_personal_plan_tool(*, data_dir: Path, options: dict[str, Any],
                     "uniqueItems": True,
                     "description": "Apple 草稿尚未明确的信息；截图相对日期不明用 image_date；不确定目标用 calendar_id/id；多个提前提醒限制用 early_reminder。不能用此字段索取操作同意。"},
     )
-    properties["kind"]["description"] = "对象类型。create/update/delete 必填：日程 event、事项 reminder、清单 list、群组 group；query 可省略表示全部。"
+    properties["kind"]["description"] = "对象类型。create/update/delete 必填：日程 event、事项 reminder、清单 list、群组 group、清单内分区 section、日历 event_calendar；query 可省略表示全部。"
     properties["text"]["description"] = "query 时为搜索词。"
     operation_properties = {key: value for key, value in properties.items()
-                            if key not in {"text", "include_completed", "offset", "limit", "draft_call_id"}}
+                            if key not in {"text", "include_completed", "offset", "limit", "draft_call_id"} | QUERY_FIELDS.keys()}
     operation_properties["action"] = {"type": "string", "enum": ["create", "update", "delete"]}
     properties["operations"] = {"type": "array", "minItems": 1, "maxItems": 20,
         "description": "batch 使用完整的多项草稿；在同一预览中逐项列出，一次批准，按顺序保存。",
@@ -143,9 +146,10 @@ def create_personal_plan_tool(*, data_dir: Path, options: dict[str, Any],
                 missing.append("id")
         else:
             kind = draft.get("kind")
-            if kind not in {"event", "reminder", "list", "group"}:
+            if kind not in {"event", "reminder", "list", "group", "section", "event_calendar"}:
                 raise ValueError("操作草稿必须指定对象类型。")
             fields = dict(draft.get("fields", {}))
+            validate_tags(kind, fields)
             if kind == "reminder" and isinstance(fields.get("location"), str):
                 async def find_location():
                     result = await asyncio.to_thread(service.search_locations, fields["location"])
@@ -184,6 +188,8 @@ def create_personal_plan_tool(*, data_dir: Path, options: dict[str, Any],
             if action == "create":
                 if not fields.get("title", "").strip():
                     missing.append("title")
+                if kind == "section" and not fields.get("calendar_id"):
+                    missing.append("calendar_id")
                 if kind == "event":
                     missing.extend(key for key in ("start", "end") if not fields.get(key))
                     for key in ("start", "end"):

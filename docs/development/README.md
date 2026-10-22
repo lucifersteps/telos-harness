@@ -44,3 +44,7 @@ Apple 权限授予独立的「Telos Apple」，桌面版和 CLI 使用同一路�
 发布新版本时，上传同一构建产生的 `.tgz` 和 `.tgz.sha256`，注明宿主版本、平台与签名状态；同步首页的开发版/发布版状态，以及 AI 安装指南中的版本。安装包内 README 来自 `packaging/README.md`。不要仅更新源码后就把开发包写成已发布版本。
 
 发布前检查 Git 历史和最终包中的凭据与个人数据，运行合并影响范围的回归，校验包内许可证、清单和 SHA256。另一台实体 Mac 的首次安装与授权尚未验证，发布说明必须保留这一限制。
+
+标签开发回归：`tests/business_tests/test_tags.py` 覆盖字段、预览和冲突；`tests/test_tags.py` 使用实际 CLI/Desktop Host 与模拟服务验证确认和重启。`TELOS_TAGS_LIVE=1` 显式启用 `tests/test_tags_live.py`，使用刚编译并获用户授权的 Apple 组件，只创建、修改、清理唯一命名的临时测试清单与事项。默认不会写入真实 Apple 数据。可用 `TELOS_TAGS_HELPER` 指定测试组件，不能指向不含标签能力的旧版本。
+
+Apple 扩展开发版的验证入口：`tests/business_tests/test_extended_apple.py`（参数/预览/筛选）、`tests/test_extended_apple_live.py`（显式 `TELOS_EXTENDED_LIVE=1`，独立已授权测试组件和临时数据）、`tests/test_extended_apple_hosts.py`（桌面/CLI 宿主）。具体范围和版本记录见 [validation.md](validation.md)。

@@ -13,7 +13,13 @@ from telos.tools.apple.service import AppleService, operation_key
 from telos.tools.apple.locations import LOCATION_SCHEMA, location_summary
 from telos.tools.apple.recurrence import RECURRENCE_SCHEMA, recurrence_summary, validate_recurrence, validate_recurrence_scope
 
+from telos.tools.apple.tags import TAG_SCHEMA, validate_tags
+
+from telos.tools.apple.features import EXTRA_FIELDS, QUERY_FIELDS, validate_features, feature_summary, attachment_fingerprints
+
 FIELDS = {
+    **EXTRA_FIELDS,
+    "tags": TAG_SCHEMA,
     "recurrence": RECURRENCE_SCHEMA,
     "flagged": {"type": "boolean", "description": "仅提醒事项：设置或取消旗标，与优先级独立。"},
     "title": {"type": "string", "minLength": 1}, "notes": {"type": "string"},
@@ -95,6 +101,8 @@ def write_summary(action: str, args: dict[str, Any], calendars: list[dict], curr
         lines.append("操作范围：" + {"this": "仅本次日程", "future": "本次及以后的日程（此前不变）", "series": "整条重复提醒事项"}[args["recurrence_scope"]])
     if args.get("recurrence_scope") == "future" and "recurrence" in fields:
         lines.append("重新设置重复规则会重建本次及以后的实例，可能覆盖此前单独修改的未来实例。")
+    if args["kind"] == "reminder" and ("tags" in fields or values.get("tags")):
+        lines.append("标签：" + ("、".join("#" + t for t in values.get("tags", [])) or "清空标签"))
     if args["kind"] == "reminder" and ("flagged" in fields or values.get("flagged")):
         lines.append("旗标：" + ("已标记" if values.get("flagged") else "取消标记"))
     if args["kind"] == "reminder" and ("location" in fields or values.get("location")):
@@ -130,7 +138,7 @@ def write_summary(action: str, args: dict[str, Any], calendars: list[dict], curr
             lines.append("优先级：" + str(fields["priority"]))
     lines.append("日历：" + calendar if args["kind"] == "event" else "清单：" + calendar)
     if action == "update":
-        labels = {"recurrence": "重复规则", "flagged": "旗标", "title": "标题", "notes": "备注", "url": "链接", "calendar_id": "所属清单/日历",
+        labels = {"tags": "标签", "recurrence": "重复规则", "flagged": "旗标", "title": "标题", "notes": "备注", "url": "链接", "calendar_id": "所属清单/日历",
                   "due": "到期日", "completed": "完成状态", "priority": "优先级", "start": "开始时间",
                   "end": "结束时间", "all_day": "全天", "location": "地点", "alarm_minutes_before": "日程提醒", "early_reminder_minutes": "提前提醒"}
         ordered_fields = [key for key in labels if key in fields] + sorted(fields.keys() - labels.keys())
@@ -139,6 +147,9 @@ def write_summary(action: str, args: dict[str, Any], calendars: list[dict], curr
     for name, label in [("notes", "备注"), ("url", "链接")]:
         if name in fields:
             lines.append(label + "：" + (str(fields[name])[:180] or "清空"))
+    lines.extend(feature_summary(fields, current))
+    if action == "delete" and (current or {}).get("subtask_ids"):
+        lines.append("包含子任务，须先逐项处理子任务再删除父任务。")
     return "\n".join(lines)
 
 
@@ -150,19 +161,20 @@ def create_apple_tool(backend: str, *, data_dir: Path, options: dict[str, Any], 
     names = {"query": "appleQuery", "detail": "appleDetail", "create": "appleCreate",
              "update": "appleUpdate", "delete": "appleDelete"}
     descriptions = {
-        "query": "重新读取 Apple。kind=reminder/event 查事项，list/group 查清单/群组；返回归属、外观、账户和原生图标目录及 revision。默认日历范围过去30天到未来180天。",
+        "query": "重新读取 Apple。kind=reminder/event 查事项，list/group 查清单/群组，section 查清单内分区，event_calendar 查日历容器；返回归属、外观、账户和原生图标目录及 revision。默认日历范围过去30天到未来180天。",
         "detail": "重新读取 Apple 事项、清单或群组及 revision；id 来自 appleQuery。",
-        "create": "创建 Apple 事项、清单或群组。事项必填 calendar_id，日程必填 start/end；清单和群组必填 title，可指定账户。清单支持颜色、图标和群组归属。用户指令明确且信息齐全时直接调用；工具负责预览和唯一一次确认，不先发送创建前确认。",
+        "create": "创建 Apple 事项、清单、群组、分区或日历容器。分区必填calendar_id；日历容器可设置title/color/account_id。事项必填 calendar_id，日程必填 start/end；清单和群组必填 title，可指定账户。清单支持颜色、图标和群组归属。用户指令明确且信息齐全时直接调用；工具负责预览和唯一一次确认，不先发送创建前确认。",
         "update": "修改 Apple 对象，仅提交要改的字段。清单支持名称、颜色、emoji 或原生 symbol 图标、group_id 归属；群组支持改名。必须带 expected_revision。直接调用进入唯一一次工具审批，不先索取普通消息确认；批准后检查版本。",
         "delete": "删除 Apple 对象，必须带 expected_revision。直接调用进入唯一一次工具审批，不先索取普通消息确认。清单仅可删除空清单；删除群组保留子清单和任务。重复日程必须指定this/future范围；删除重复提醒事项须指定series。",
     }
     properties: dict[str, Any] = {
-        "kind": {"type": "string", "enum": ["reminder", "event", "list", "group"]},
+        "kind": {"type": "string", "enum": ["reminder", "event", "list", "group", "section", "event_calendar"]},
         "start": {"type": "string", "description": "可选日历查询窗口开始，带时区的 ISO 8601。"},
         "end": {"type": "string", "description": "可选日历查询窗口结束，带时区的 ISO 8601。"},
     }
     required = []
     if action == "query":
+        properties.update(**QUERY_FIELDS)
         properties.update(text={"type": "string"}, include_completed={"type": "boolean"},
                           offset={"type": "integer", "minimum": 0},
                           limit={"type": "integer", "minimum": 1, "maximum": 500})
@@ -202,6 +214,8 @@ def create_apple_tool(backend: str, *, data_dir: Path, options: dict[str, Any], 
         validate_recurrence_scope(args["kind"], action, current, fields, args.get("recurrence_scope"))
         if args["kind"] == "reminder" and "due" in fields and not fields["due"] and current.get("recurring") and not ("recurrence" in fields and fields["recurrence"] is None):
             raise ValueError("取消到期日期前须同时取消重复规则。")
+        validate_tags(args["kind"], fields)
+        validate_features(args["kind"], fields, current)
         if "flagged" in fields and args["kind"] != "reminder":
             raise ValueError("旗标仅适用于提醒事项。")
         if "recurrence" in fields:
@@ -215,7 +229,22 @@ def create_apple_tool(backend: str, *, data_dir: Path, options: dict[str, Any], 
         snapshot = await asyncio.to_thread(service.query, {"kind": args["kind"], "limit": 1,
             **{key: args[key] for key in ["start", "end"] if args.get(key)}})
         approved_args = {**args, "fields": dict(args.get("fields", {}))}
-        if args["kind"] in {"list", "group"}:
+        if args["kind"] in {"section", "event_calendar"}:
+            fields = approved_args["fields"]
+            if args["kind"] == "event_calendar" and action == "create" and not fields.get("account_id"):
+                fields["account_id"] = snapshot.get("container_capabilities",{}).get("default_event_account_id","")
+                if not fields["account_id"]: raise ValueError("无法确定日历账户，请明确指定账户。")
+            label = "清单内分区" if args["kind"] == "section" else "日历"
+            preview["summary"] = label + "：" + str(fields.get("title",current.get("title","")))
+            for key, value in fields.items():
+                if key == "calendar_id":
+                    value = next((c["title"] for c in snapshot["calendars"] if c["id"]==value),value)
+                elif key == "account_id":
+                    value = next((c.get("account_title",value) for c in snapshot["containers"] if c.get("account_id")==value and c["kind"]=="event_calendar"),value)
+                preview["summary"] += "\n" + {"title":"名称","calendar_id":"所属清单","account_id":"账户","color":"颜色"}.get(key,key) + "：" + str(value)
+            if action == "delete":
+                preview["summary"] += "\n" + ("仅可删除空分区；请先移出或删除其中事项。" if args["kind"]=="section" else "将删除整个日历及其中所有日程（包括查询范围外的日程）。")
+        elif args["kind"] in {"list", "group"}:
             capabilities = snapshot["container_capabilities"]
             fields = approved_args["fields"]
             if action == "create":
@@ -261,9 +290,17 @@ def create_apple_tool(backend: str, *, data_dir: Path, options: dict[str, Any], 
                 if len(due) <= 10 or datetime.fromisoformat(due).tzinfo is None:
                     raise ValueError("设置提前提醒需要明确到期日期、时刻和时区。")
             preview["summary"] = write_summary(action, approved_args, snapshot["calendars"], preview.get("current"))
+        approved_args["attachment_fingerprints"] = attachment_fingerprints(approved_args["fields"])
+        references = {}
+        for field, kind in [("parent_id","reminder"),("section_id","section")]:
+            if approved_args["fields"].get(field):
+                reference = await asyncio.to_thread(service.detail,kind,approved_args["fields"][field])
+                references[field] = {k:v for k,v in reference.items() if k!="revision"}
+                preview["summary"] += "\n目标" + ("父任务" if field=="parent_id" else "分区") + "：" + reference["title"]
+        approved_args["expected_references"] = references
         return ToolExecution(need_confirm=True, approval_preview=preview,
                              description={"create": "创建", "update": "修改", "delete": "删除"}[action]
-                                 + {"event": " Apple 日程", "reminder": " Apple 提醒事项", "list": " Apple 清单", "group": " Apple 群组"}[args["kind"]],
+                                 + {"event": " Apple 日程", "reminder": " Apple 提醒事项", "list": " Apple 清单", "group": " Apple 群组", "section":" Apple 分区", "event_calendar":" Apple 日历"}[args["kind"]],
                              execute=lambda: asyncio.to_thread(service.mutate, action, approved_args, operation_id))
 
     return ExecutableTool(name=names[action], description=descriptions[action],

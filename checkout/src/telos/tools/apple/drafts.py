@@ -28,7 +28,7 @@ def materialize_draft(args: dict, lookup: Callable[[str], dict], seen: frozenset
             raise ValueError("只能在未保存的日程与提醒事项草稿之间切换类型。")
         # 清单与日历不同，旧类型的时间和提醒字段也不能带到新类型。
         for key in ("calendar_id", "due", "early_reminder_minutes", "completed", "priority",
-                    "start", "end", "all_day", "location", "alarm_minutes_before", "flagged", "recurrence"):
+                    "start", "end", "all_day", "location", "alarm_minutes_before", "flagged", "recurrence", "tags", "parent_id", "section_id", "urgent", "attachments", "travel_time_minutes"):
             fields.pop(key, None)
     fields.update(deepcopy(args.get("fields", {})))
     base.update(kind=kind, fields=fields, unresolved=list(args.get("unresolved", [])))

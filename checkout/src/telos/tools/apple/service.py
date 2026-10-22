@@ -146,14 +146,24 @@ class AppleService:
                 snapshot["checked_at"] = now()
         else:
             snapshot = self.refresh()
+        from telos.tools.apple.features import matches_filters, QUERY_FIELDS
         kind, text = args.get("kind", ""), str(args.get("text", "")).casefold()
         if kind in {"list", "group"} and not snapshot.get("container_capabilities", {}).get("groups"):
             raise AppleNativeError("清单与群组最新读取失败：" + str(snapshot.get("container_capabilities", {}).get("error", "请重新构建连接器")),
                                    code="read_failed")
-        source = snapshot.get("containers", []) if kind in {"list", "group"} else snapshot["items"]
+        if kind == "section" and snapshot.get("container_capabilities",{}).get("sections") is False:
+            raise AppleNativeError("当前系统分区读取不可用。",code="read_failed")
+        source = snapshot.get("containers", []) if kind in {"list", "group", "section", "event_calendar"} else snapshot["items"]
+        if args.get("section_ids") and any(item.get("kind")=="reminder" and item.get("section_id") is None
+                and (not args.get("calendar_ids") or item.get("calendar_id") in args["calendar_ids"]) for item in source):
+            raise AppleNativeError("部分清单的分区归属读取失败，不能给出完整筛选结果。",code="read_failed")
+        if "urgent" in args and any(item.get("kind")=="reminder" and item.get("urgent") is None
+                and (not args.get("calendar_ids") or item.get("calendar_id") in args["calendar_ids"]) for item in source):
+            raise AppleNativeError("部分提醒事项无法读取紧急状态，不能给出完整筛选结果。",code="read_failed")
         items = [item for item in source
                  if (not kind or item["kind"] == kind)
                  and (args.get("include_completed", False) or not item.get("completed", False))
+                 and matches_filters(item,args)
                  and (not text or text in (item.get("title", "") + " " + item.get("notes", "")).casefold())]
         items.sort(key=lambda item: (item.get("start", item.get("due", "")), item["kind"], item["id"]))
         offset, limit = int(args.get("offset", 0)), int(args.get("limit", 100))
@@ -161,7 +171,7 @@ class AppleService:
             raise ValueError("offset 不能为负，limit 必须为 1 到 500。")
         return {"checked_at": snapshot["checked_at"], "calendars": snapshot["calendars"],
                 "scope": {**snapshot["scope"], "kind": kind, "text": text,
-                          "include_completed": args.get("include_completed", False)},
+                          "include_completed": args.get("include_completed", False), **{k:args[k] for k in QUERY_FIELDS if k in args}},
                 "containers": [{**item, "revision": revision(item)} for item in snapshot.get("containers", [])],
                 "container_capabilities": snapshot.get("container_capabilities", {}),
                 "total": len(items), "offset": offset, "limit": limit,
@@ -226,6 +236,11 @@ class AppleService:
                 request.update(id=args["id"], expected=item)
             if args.get("recurrence_scope"):
                 request["recurrence_scope"] = args["recurrence_scope"]
+            for key in ("expected_references","attachment_fingerprints"):
+                if args.get(key): request[key] = args[key]
+            from telos.tools.apple.features import attachment_fingerprints
+            if args.get("attachment_fingerprints",{}) != attachment_fingerprints(request["fields"]):
+                raise AppleNativeError("附件在预览后发生变化，请重新确认。",code="conflict")
             if args.get("expected_destination"):
                 request["expected_destination"] = args["expected_destination"]
             with self.database() as db:
