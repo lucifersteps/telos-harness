@@ -11,6 +11,30 @@ from telos.adapters.base import SendResult
 from runtime import ROOT
 from support import Harness,call,draft
 
+@pytest.mark.parametrize('include_card',[False,True])
+def test_direct_update_keeps_independent_query_answer(tmp_path,include_card):
+    async def run():
+        answer='明天日历里暂时没有其他日程。'
+        h=Harness(tmp_path,[])
+        try:
+            h.runtime.business.direct_write=True
+            item=h.apple.detail('reminder','reminder-001')
+            def reply(request):
+                card=h.runtime.business.active[h.session]['receipt']['text']
+                return card+'\n'+answer if include_card else answer
+            h.model.script=[
+                call('query',{'action':'query','kind':'event','start':'2027-01-02T00:00:00+08:00',
+                    'end':'2027-01-03T00:00:00+08:00'}),
+                call('update',{'action':'update','kind':'reminder','id':item['id'],
+                    'expected_revision':item['revision'],'fields':{'due':'2027-01-02'}}),reply]
+            await h.submit('把健身移到明天相同时间吧，明天应该没什么安排吧？')
+            assert len(h.sent)==2 and '**已保存**' in h.sent[0] and h.sent[1]==answer
+            assert '回复【1】撤销' in h.sent[0] and len(h.native.writes)==1
+            await h.submit('1')
+            assert h.sent[-1]=='已撤销这次保存。' and h.native.items[0]['due']==item['due']
+        finally:await h.close()
+    asyncio.run(run())
+
 def test_query_preview_confirm(tmp_path):
     async def run():
         def answer(request):

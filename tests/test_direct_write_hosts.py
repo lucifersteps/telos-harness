@@ -1,5 +1,6 @@
 """Native Desktop/CLI use the same write-mode setting and undo receipts."""
 import json
+import sqlite3
 import pytest
 from settings import read_config,write_config
 from support import call,draft
@@ -27,7 +28,10 @@ async def test_direct_write_toggle_restart_and_undo(tmp_path,desktop):
         async def message(key,text):
             before=len(h.services.sent);h.services.push(key,text)
             await h.wait(lambda:len(h.services.sent)>before)
-        h.model.script=[call('direct-create',draft()),'已保存。']
+        def saved_card(request):
+            with sqlite3.connect(h.home/'telos/business.sqlite') as db:
+                return db.execute('SELECT reply FROM messages WHERE reply IS NOT NULL ORDER BY rowid DESC LIMIT 1').fetchone()[0]
+        h.model.script=[call('direct-create',draft()),saved_card]
         await message('create','创建测试会议')
         assert len(native.writes)==1 and '回复【1】撤销' in json.dumps(h.services.sent,ensure_ascii=False)
         assert len(h.services.sent)==1

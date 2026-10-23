@@ -207,7 +207,7 @@ async def test_saved_card_is_one_bubble_and_one_undo_survives_restart(tmp_path):
     try:
         b=c.business;active(b,'create')
         result=await b.execute('s','a','personalPlan',draft())
-        text=b.render('s','我已帮你保存。\n请回复一串编号来撤销。')
+        text=b.render('s',result['text'])
         assert text==result['text'] and '**已保存**' in text and '```text' in text
         assert '回复【1】撤销；需要修改时直接回复修改内容' in text
         assert result['undo_id'][-12:] not in text
@@ -226,6 +226,36 @@ async def test_saved_card_is_one_bubble_and_one_undo_survives_restart(tmp_path):
         assert b.active['s']['receipt']['status']=='deny' and len(n.writes)==2
         assert not b.latest_card_undo('other')
     finally:await c.close()
+
+@run
+async def test_update_and_query_answer_survive_render_delivery_and_restart(tmp_path):
+    from telos.adapters.base import ConversationRef, SendResult
+    from telos.adapters.wechat.outbound import WeChatOutbound
+    from telos.adapters.wechat.config import WeChatConfig
+    b,n=setup(tmp_path)
+    b.active['s']['text']='把健身移到明天相同时间吧，明天应该没什么安排吧？'
+    item=b.apple.detail('reminder','reminder-001')
+    await b.execute('s','query','personalPlan',{'action':'query','kind':'event',
+        'start':'2027-01-02T00:00:00+08:00','end':'2027-01-03T00:00:00+08:00'})
+    result=await b.execute('s','update','personalPlan',{'action':'update','kind':'reminder',
+        'id':item['id'],'expected_revision':item['revision'],'fields':{'due':'2027-01-02'}})
+    card=result['text'];answer='明天日历里暂时没有其他日程。'
+    for model_text in (answer,card+'\n'+answer,answer+'\n'+card):
+        text=b.render('s',model_text)
+        assert text.count(card)==1 and text.count(answer)==1
+    assert b.render('s','')==card  # Tool receipt still survives an empty model reply.
+    b.save_reply('m1',b.render('s',answer))
+    # The durable outbox retains both the card and answer across restart.
+    b=Business(tmp_path,AppleService(n,tmp_path/'apple'))
+    sent=[]
+    async def send(ref,text):sent.append(text);return SendResult(ok=True)
+    adapter=WeChatOutbound(config=WeChatConfig(),send_text_fn=send)
+    await b.deliver('s','m1',adapter,ConversationRef(platform='wechat',chat_id='user'))
+    assert sent==[card,answer] and len(n.writes)==1
+    assert b.latest_card_undo('s')==result['undo_id']
+    active(b,'undo')
+    assert (await b.undo('s',b.latest_card_undo('s')))['undone']
+    assert n.items[0]['due']==item['due']
 
 @run
 async def test_one_keeps_pending_confirmation_and_does_not_undo_older_card(tmp_path):

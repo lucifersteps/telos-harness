@@ -319,7 +319,9 @@ class Business:
         token=delivery_log_context.set({'delivery_id':key,'input_event_ids':[key]})
         pending=self.pending(session)
         preview=pending.get('text','') if pending and pending['kind']=='approval' else ''
-        protected=row[0] if self.saved_cards(session,row[0]) else preview
+        cards=self.saved_cards(session,row[0])
+        # Keep a saved card intact without folding independent answers into it.
+        protected=(cards[0]['text'] if len(cards)==1 and not preview else row[0]) if cards else preview
         try:result=await adapter.send_text(ref,row[0],**({'protected_text':protected} if protected else {}))
         finally:delivery_log_context.reset(token)
         if not result.ok:return
@@ -338,7 +340,5 @@ class Business:
             if presentation and text.count(presentation)!=1:text=presentation
         parts=[text.strip()] if text.strip() else []
         receipt=self.active.get(session,{}).get('receipt') or {}
-        if not pending and receipt.get('direct') and receipt.get('saved') and receipt.get('text'):
-            return receipt['text']
         if receipt.get('text') and receipt['text'] not in '\n'.join(parts):parts.insert(0,receipt['text'])
         return '\n\n'.join(parts)
