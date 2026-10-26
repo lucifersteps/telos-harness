@@ -24,7 +24,8 @@ def value(request):return json.loads(tool_text(results(request)[-1]))
 def assert_telos(request):
     names={t.get('name') or t['function']['name'] for t in request['tools']}
     assert NAMES|{'personalPlan','user_memory','session_event_read','web_fetch','bash','read','read_image'}<=names
-    assert not names&{'write','subagent'}
+    assert {'write','edit','glob','grep'}<=names
+    assert not names&{'subagent','session_search','ask_user_question'}
 
 def test_cli_timer_restart_overdue_and_output_replay(tmp_path):
     async def run():
@@ -97,6 +98,22 @@ def test_scheduled_output_retry_resumes_after_last_acknowledged_part(tmp_path):
         finally:await h.close()
     asyncio.run(run())
 
+
+def test_scheduled_list_is_staged_and_delivered_as_one_bubble(tmp_path):
+    async def run():
+        h=Harness(tmp_path,[])
+        listing='**答辩笔记**\n- 研究演讲\n- 金字塔原理'
+        try:
+            h.runtime.bind_ref(h.session,h.ref)
+            await h.runtime.stage_scheduled({'session':h.session,'seq':17,'text':'查询完成。\n\n'+listing,'inputs':[]})
+            with h.runtime.business.db() as db:
+                parts=json.loads(db.execute('SELECT parts FROM schedule_outbox').fetchone()[0])
+            assert parts==['查询完成。',listing]
+            await h.runtime.drain_scheduled()
+            assert h.sent==parts
+        finally:await h.close()
+    asyncio.run(run())
+
 def test_completed_output_recovers_from_native_log_without_model_reexecution(tmp_path):
     async def run():
         h=Harness(tmp_path,[create('lost-output',1),'已设置。','待恢复的定时回复。'])
@@ -157,6 +174,23 @@ def test_scheduled_preview_requires_later_human_confirmation(tmp_path):
             await wait(lambda:bool(h.runtime.business.pending(h.session)))
             await wait(lambda:h.runtime.business.pending(h.session).get('delivered'))
             assert not h.native.writes
+            assert h.sent[-1]==h.runtime.business.pending(h.session)['text']
+            await h.submit('1');assert len(h.native.writes)==1
+        finally:await h.close()
+    asyncio.run(run())
+
+def test_background_job_notice_cannot_direct_write(tmp_path):
+    async def run():
+        h=Harness(tmp_path,[call('background',{'command':'sleep 2',
+            'description':'Native completion notice test','run_in_background':True},'bash'),
+            '后台已启动。',call('job-draft',draft()),'请确认会议。','已保存。'])
+        h.runtime.business.direct_write=True
+        try:
+            await h.submit('测试后台任务，完成后准备会议')
+            await wait(lambda:bool(h.runtime.business.pending(h.session)))
+            await wait(lambda:h.runtime.business.pending(h.session).get('delivered'))
+            assert not h.native.writes
+            assert h.runtime.business.active[h.session]['scheduled'] is True
             assert h.sent[-1]==h.runtime.business.pending(h.session)['text']
             await h.submit('1');assert len(h.native.writes)==1
         finally:await h.close()

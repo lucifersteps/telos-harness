@@ -8,7 +8,7 @@
 ## 仓库或 Release 打不开，找不到安装包
 
 - 从仓库 Releases 页面进入当前版本；如果旧版本附件不可见，使用当前发布包。公开附件无需 GitHub 账号。
-- 本版安装包与校验文件位于 [0.4.14 Release](https://github.com/lucifersteps/telos-harness/releases/tag/v0.4.14)。仍看不到附件时，核对版本和下载状态，联系维护者；不拼接猜测的下载链接。
+- 本版安装包与校验文件位于 [0.4.15 Release](https://github.com/lucifersteps/telos-harness/releases/tag/v0.4.15)。仍看不到附件时，核对版本和下载状态，联系维护者；不拼接猜测的下载链接。
 - 下载的是 `.tgz` Release 附件；GitHub 自动提供的 Source code ZIP/tar.gz 不能当作自包含插件包安装。
 - SHA256 不匹配时停止安装并重新下载。缺少校验附件可核对 GitHub 资产 `digest` 或维护者提供的值；不要把自己刚算出的哈希作为期望值。
 - `gh` 未安装、未登录或 GitHub API 返回限流错误时，使用 [无需账号的直接下载命令](install-for-ai.md#download)。API 的 403 不代表公开 Release 必须登录。

@@ -2,7 +2,7 @@
 
 本指南供能操作用户本机的 AI 执行，也可供用户手动操作。目标是完成微信聊天、默认启用的 Apple 日历与提醒事项配置，并留下可重复的启动方式。只有网页或聊天能力时，请给出对应步骤，由用户执行。
 
-适用版本：Telos **0.4.14**，已验证 DSH **0.2.1-rc.2**，macOS 14+ Apple Silicon。安装其他版本时，应阅读该 Release/tag 对应的文档，不要承诺旧包具有新功能。
+适用版本：Telos **0.4.15**，已验证 DSH **0.2.1-rc.2**，macOS 14+ Apple Silicon。安装其他版本时，应阅读该 Release/tag 对应的文档，不要承诺旧包具有新功能。
 
 ## 从仓库链接开始
 
@@ -67,20 +67,20 @@ command -v dsh
 
 安装来源：[Telos Releases](https://github.com/lucifersteps/telos-harness/releases)。普通使用者不需要克隆源码、安装 Python 或执行构建脚本。
 
-本指南对应 [0.4.14 Release](https://github.com/lucifersteps/telos-harness/releases/tag/v0.4.14)，附件包含安装包与 SHA256 校验文件。以下是该版已发布的固定附件地址，不依赖 GitHub API、GitHub 账号、`gh`、Git 或 Python。没有现成下载时，在用户 Mac 的终端执行：
+本指南对应 [0.4.15 Release](https://github.com/lucifersteps/telos-harness/releases/tag/v0.4.15)，附件包含安装包与 SHA256 校验文件。以下是该版已发布的固定附件地址，不依赖 GitHub API、GitHub 账号、`gh`、Git 或 Python。没有现成下载时，在用户 Mac 的终端执行：
 
 ```sh
 mkdir -p "$HOME/Downloads"
-TELOS_DOWNLOAD_DIR="$(mktemp -d "$HOME/Downloads/telos-0.4.14.XXXXXX")"
+TELOS_DOWNLOAD_DIR="$(mktemp -d "$HOME/Downloads/telos-0.4.15.XXXXXX")"
 cd "$TELOS_DOWNLOAD_DIR" || exit 1
 curl --fail --location --retry 2 --connect-timeout 20 \
-  --output telos-harness-0.4.14-macos-arm64.tgz \
-  https://github.com/lucifersteps/telos-harness/releases/download/v0.4.14/telos-harness-0.4.14-macos-arm64.tgz || exit 1
+  --output telos-harness-0.4.15-macos-arm64.tgz \
+  https://github.com/lucifersteps/telos-harness/releases/download/v0.4.15/telos-harness-0.4.15-macos-arm64.tgz || exit 1
 curl --fail --location --retry 2 --connect-timeout 20 \
-  --output telos-harness-0.4.14-macos-arm64.tgz.sha256 \
-  https://github.com/lucifersteps/telos-harness/releases/download/v0.4.14/telos-harness-0.4.14-macos-arm64.tgz.sha256 || exit 1
-shasum -a 256 -c telos-harness-0.4.14-macos-arm64.tgz.sha256 || exit 1
-TELOS_ARCHIVE="$TELOS_DOWNLOAD_DIR/telos-harness-0.4.14-macos-arm64.tgz"
+  --output telos-harness-0.4.15-macos-arm64.tgz.sha256 \
+  https://github.com/lucifersteps/telos-harness/releases/download/v0.4.15/telos-harness-0.4.15-macos-arm64.tgz.sha256 || exit 1
+shasum -a 256 -c telos-harness-0.4.15-macos-arm64.tgz.sha256 || exit 1
+TELOS_ARCHIVE="$TELOS_DOWNLOAD_DIR/telos-harness-0.4.15-macos-arm64.tgz"
 ```
 
 每步失败即停止，不安装部分下载的文件。换到新终端时，需要重新设置 `TELOS_ARCHIVE` 为已下载文件的绝对路径。也可让用户从 Release 页面下载这两个同名附件，再在它们所在目录校验。
@@ -89,16 +89,16 @@ TELOS_ARCHIVE="$TELOS_DOWNLOAD_DIR/telos-harness-0.4.14-macos-arm64.tgz"
 
 ```sh
 gh release list --repo lucifersteps/telos-harness --limit 10
-gh release view v0.4.14 --repo lucifersteps/telos-harness --json tagName,assets,url
+gh release view v0.4.15 --repo lucifersteps/telos-harness --json tagName,assets,url
 ```
 
 确认版本存在后，在新建的空下载目录执行：
 
 ```sh
-gh release download v0.4.14 --repo lucifersteps/telos-harness \
-  --pattern 'telos-harness-0.4.14-macos-arm64.tgz' \
-  --pattern 'telos-harness-0.4.14-macos-arm64.tgz.sha256'
-shasum -a 256 -c telos-harness-0.4.14-macos-arm64.tgz.sha256
+gh release download v0.4.15 --repo lucifersteps/telos-harness \
+  --pattern 'telos-harness-0.4.15-macos-arm64.tgz' \
+  --pattern 'telos-harness-0.4.15-macos-arm64.tgz.sha256'
+shasum -a 256 -c telos-harness-0.4.15-macos-arm64.tgz.sha256
 ```
 
 预期结果为文件名后显示 `OK`。失败则停止安装并重新下载。没有 `.sha256` 附件时，可计算 `shasum -a 256 安装包路径` 并与该 Release 附件的 GitHub `digest` 或维护者提供的 SHA256 比较；仅计算本地哈希不算完成校验。两者都没有时，先取得校验值。
@@ -106,14 +106,14 @@ shasum -a 256 -c telos-harness-0.4.14-macos-arm64.tgz.sha256
 检查包内元数据，核对版本、平台与宿主要求：
 
 ```sh
-tar -xOf telos-harness-0.4.14-macos-arm64.tgz package/package.json
-tar -xOf telos-harness-0.4.14-macos-arm64.tgz package/component-manifest.json
+tar -xOf telos-harness-0.4.15-macos-arm64.tgz package/package.json
+tar -xOf telos-harness-0.4.15-macos-arm64.tgz package/component-manifest.json
 ```
 
 应是 `telos-harness`、目标版本、`darwin` / `arm64`，manifest 的 `min_macos` 为 `14`、`harness` 为 `0.2.1rc2`。安装变量使用下载文件的**绝对路径**，不要把示例路径原样执行：
 
 ```sh
-TELOS_ARCHIVE="/absolute/path/telos-harness-0.4.14-macos-arm64.tgz"
+TELOS_ARCHIVE="/absolute/path/telos-harness-0.4.15-macos-arm64.tgz"
 test -f "$TELOS_ARCHIVE"
 ```
 
@@ -370,6 +370,8 @@ dsh --profile telos
 `--telos-status` 中的 `direct_write` 显示当前设置。配置文件中的同名布尔值也可手动修改，已有配置只合并该字段，重启生效；字段缺失视为开启。
 
 直接写入仅覆盖单项新增、普通标题/备注/日期等可恢复修改。删除、批量、重复系列、附件、父子关系/分区等结构变更、会议参与者相关对象，以及不能可靠恢复原状的修改仍预览确认。多项请求使用批量预览；同一条消息最多自动保存一项。用户要求先预览时仍可先确认；缺信息照常追问。定时任务不会自动写入 Apple，旧的待确认草稿不会因开关切换而自行保存。
+
+0.4.15 复用 DSH 已启用的通用工具，文件、搜索、终端与后台作业仍遵守宿主权限。升级后可用临时文件验证读写、编辑和搜索；需要桌面交互或跨会话控制的工具仍不向微信开放。列表标题与同一份列表应在一个消息气泡中，代码块、预览和保存卡片应保留内部换行；超过单条长度限制时仍会分段。
 
 0.4.14 会同时保留保存卡片和本轮独立问题的答案。例如“把健身移到明天相同时间，明天有什么安排？”应收到完整修改卡片及日程查询答案；两者分别发送，回复【1】仍对应这次保存。升级验收可用临时事项加独立查询验证，最后撤销临时事项。
 

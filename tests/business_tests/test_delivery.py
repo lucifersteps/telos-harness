@@ -1,4 +1,42 @@
-from telos.adapters.delivery import split_message_bubbles
+import pytest
+
+from telos.adapters.delivery import split_message_bubbles, split_reply_bubbles
+
+
+@pytest.mark.parametrize("marker", ["-", "*", "+", "1.", "1)", "1、"])
+def test_reply_keeps_list_heading_items_and_indented_details_together(marker):
+    listing = f"**答辩笔记**\n{marker} 研究演讲\n  说明：包含演讲结构。\n  - 子项目\n\n{marker} 金字塔原理"
+    assert split_reply_bubbles("已找到。\n\n" + listing + "\n\n这是全部相关笔记。") == [
+        "已找到。", listing, "这是全部相关笔记。"
+    ]
+
+
+def test_reply_keeps_separate_lists_and_plain_chat():
+    notes = "**笔记（2 篇）**\n- 如何做一次良好的研究演讲.md\n- 在PPT演示文稿中呈现金字塔.md"
+    references = "参考资料：\n\n- giving-a-talk-slides.pdf\n- 金字塔原理.pdf"
+    assert split_reply_bubbles("这次读到了。\n\n" + notes + "\n\n" + references + "\n其他补充。\n下一句话。") == [
+        "这次读到了。", notes, references, "其他补充。", "下一句话。"
+    ]
+
+
+def test_reply_preserves_list_indentation_and_explicit_bubble_boundaries():
+    assert split_reply_bubbles("- 第一项\n  1. 子项\n---\n- 第二项") == [
+        "- 第一项\n  1. 子项", "- 第二项"
+    ]
+
+
+@pytest.mark.parametrize("fence", ["```", "~~~"])
+def test_reply_keeps_fenced_content_including_blank_lines_and_separators(fence):
+    block = f"{fence}markdown\n- 第一项\n\n---\n- 第二项\n{fence}"
+    assert split_reply_bubbles("示例\n" + block + "\n结束。") == ["示例", block, "结束。"]
+
+
+def test_reply_preserves_preview_between_lists():
+    listing = "待办：\n- 写论文\n- 准备答辩"
+    preview = "操作预览\n\n- 原文\n---\n回复 1 确认"
+    assert split_reply_bubbles(listing + "\n" + preview + "\n" + listing, protected_text=preview) == [
+        listing, preview, listing
+    ]
 
 
 def test_delivery_splits_on_standalone_separator() -> None:

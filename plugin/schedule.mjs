@@ -4,6 +4,10 @@ import ScheduleService,{scheduleDomain} from '@deepseek-ai/dsh-schedule';
 import * as ScheduleTools from '@deepseek-ai/dsh-tool-schedule';
 import {post} from './bridge.mjs';
 
+// Both native timers and background-job notices are machine input. Reuse the
+// existing non-human turn protection and durable WeChat outbox for both.
+export const isBackgroundMessage=message=>['schedule','tool-jobs'].includes(message.source?.kind);
+
 export function createScheduler(ctx,service,namespace,open) {
   if(!/^telos_schedule_[a-f0-9]{16}$/.test(namespace))throw new Error('Invalid Telos schedule namespace');
   const scope=ctx.isolate('schedule').isolate('sessionController').isolate('storageDomain');
@@ -47,7 +51,7 @@ export function conversationTurns(events) {
     if(event.type==='turn/start')current={turn:event.data.turn,scheduled:false,inputs:[],users:[],text:''};
     if(!current)continue;
     if(event.type==='user/message'){
-      if(event.data.source?.kind==='schedule'){current.scheduled=true;current.inputs.push(event.data.id);}
+      if(isBackgroundMessage(event.data)){current.scheduled=true;current.inputs.push(event.data.id);}
       if(event.data.source?.kind==='user')current.users.push(event.data.id);
     }
     if(event.type==='assistant/message')current.text=event.data.message.content.filter(b=>b.type==='text').map(b=>b.text).join('');

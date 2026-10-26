@@ -22,6 +22,66 @@ def delivery_fingerprint(value: str) -> str:
 
 
 _BUBBLE_SEPARATOR_RE = re.compile(r"^[ \t]*-{3,}[ \t]*$", re.MULTILINE)
+_LIST_ITEM_RE = re.compile(r"^[ \t]*(?:[-+*]|\d+[.)、])[ \t]+\S")
+_FENCE_RE = re.compile(r"^[ \t]*(`{3,}|~{3,})")
+
+
+def _is_list_heading(line: str) -> bool:
+    text = line.strip()
+    return text.endswith((":", "：")) or text.startswith("#") or (
+        text.startswith("**") and text.endswith("**")
+    )
+
+
+def _split_chat_bubbles(content: str) -> list[str]:
+    lines = content.splitlines()
+    bubbles: list[str] = []
+    index = 0
+    while index < len(lines):
+        line = lines[index]
+        if not line.strip() or _BUBBLE_SEPARATOR_RE.fullmatch(line):
+            index += 1
+            continue
+        start = index
+        # Keep a list's heading with its items, including the usual blank line.
+        if _is_list_heading(line):
+            following = index + 1
+            while following < len(lines) and not lines[following].strip():
+                following += 1
+            if following < len(lines) and _LIST_ITEM_RE.match(lines[following]):
+                index = following
+                line = lines[index]
+        fence = _FENCE_RE.match(line)
+        if fence:
+            marker = fence[1]
+            index += 1
+            while index < len(lines):
+                closing = lines[index].strip()
+                index += 1
+                if closing and set(closing) == {marker[0]} and len(closing) >= len(marker):
+                    break
+        elif _LIST_ITEM_RE.match(line):
+            index += 1
+            while index < len(lines):
+                continuation = lines[index]
+                if _BUBBLE_SEPARATOR_RE.fullmatch(continuation):
+                    break
+                if not continuation.strip():
+                    following = index + 1
+                    while following < len(lines) and not lines[following].strip():
+                        following += 1
+                    if following == len(lines):
+                        break
+                    continuation = lines[following]
+                    if not (_LIST_ITEM_RE.match(continuation) or continuation.startswith((" ", "\t"))):
+                        break
+                elif not (_LIST_ITEM_RE.match(continuation) or continuation.startswith((" ", "\t"))):
+                    break
+                index += 1
+        else:
+            index += 1
+        bubbles.append("\n".join(lines[start:index]).strip())
+    return bubbles
 
 
 def split_message_bubbles(text: str, max_bubbles: int | None = 8) -> list[str]:
@@ -129,20 +189,16 @@ async def send_text_in_bubbles(
 
 
 def split_reply_bubbles(text: str, *, protected_text: str = "") -> list[str]:
-    """One thought per bubble, with the authoritative preview kept intact.
+    """One thought per bubble, preserving lists, code and authoritative previews.
 
     This is only presentation: no extra model turns, markers or persisted state.
-    All chat lines are delivered without a bubble count limit.
+    Plain chat lines split individually; structured blocks retain their newlines.
+    All content is delivered without a bubble count limit.
     """
-    def chat(content: str) -> list[str]:
-        lines = [line.strip() for line in content.splitlines()
-                 if line.strip() and not _BUBBLE_SEPARATOR_RE.fullmatch(line)]
-        return lines
-
     if protected_text and protected_text in text:
         before, _, after = text.partition(protected_text)
-        return [*chat(before), protected_text, *chat(after)]
-    return chat(text)
+        return [*_split_chat_bubbles(before), protected_text, *_split_chat_bubbles(after)]
+    return _split_chat_bubbles(text)
 
 
 def compact_json(payload: dict[str, Any]) -> str:

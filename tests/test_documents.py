@@ -92,7 +92,7 @@ def assert_inspected(request,suffix):
     if suffix=='.pdf':assert '"noText":true' in value
     names=[t.get('name') or t['function']['name'] for t in request['tools']]
     for name in ['skill','bash','read','read_image']:assert names.count(name)==1
-    assert not {'job_output','job_kill','write','edit'} & set(names)
+    assert {'write','edit','glob','grep','job_output','job_list','job_kill'} <= set(names)
 
 
 @pytest.mark.parametrize('suffix',['.pdf','.docx','.xlsx'])
