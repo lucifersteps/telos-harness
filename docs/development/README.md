@@ -8,7 +8,8 @@
 - `business.py`、`channel.py`、`settings.py`、`sidecar.py`：业务与微信本机组件。
 - `checkout/src/`：构建和测试所用的 Telos 业务源码快照。
 - `apple_component.py`：通过 macOS LaunchServices 调用独立 Apple 授权组件。
-- `documents.py`：仅保存微信附件原件；`plugin/documents.mjs` 组合 DSH 原生工具与 Office 技能。`plugin/document-skills/telos-pdf/` 是系统 PDFKit 的小型调用指南与适配脚本，不是 PDF 解析器。
+- `plugin/host-tools.mjs`：复用宿主通用工具并限制微信渠道暂未适配的能力。
+- `documents.py`：仅保存微信附件原件；`plugin/documents.mjs` 补充原生 Office 技能和文件处理说明。`plugin/document-skills/telos-pdf/` 是系统 PDFKit 的小型调用指南与适配脚本，不是 PDF 解析器。
 - `personas/`：供微信会话选择的内置人设；可另外选择本机自定义文件。
 - `skills/`：随包提供的 Skill 及第三方许可。
 - `tests/`：模拟模型、Apple、微信及地图的完整流程回归，以及显式启用的真实模型测试。
@@ -36,6 +37,18 @@ bash run-validation.sh
 ```
 
 Apple 权限授予独立的「Telos Apple」，桌面版和 CLI 使用同一路径。本版为 ad-hoc 签名：组件内容更新后可能需要重新授权，本机已验证这一限制。正式分发可通过构建参数 `--sign-identity "Developer ID Application: …"` 使用稳定签名；当前尚未完成 Developer ID 签名、公证及另一台实体 Mac 验证。Telos 原创代码采用 MIT；第三方组件遵循各自许可，见根目录 LICENSE、THIRD_PARTY_NOTICES.md 与安装包 licenses/。
+
+## 通用工具复用（开发版）
+
+微信 Agent 在原生 `setup()` 中，通过 `agentPresets.mount(scope, 'standard')` 加入桌面宿主现有的标准预设；没有预设服务的 CLI 直接继承全局工具。Telos 不复制预设 YAML，也不再逐个注册文件、终端、网页、任务清单和技能调用工具。新增宿主通用工具会自动可见，宿主禁用的工具不会由 Telos 擅自重新开启。桌面使用标准预设，不跟随界面为其他会话选择的预设；标准预设失效时明确报错，不静默换成另一套工具。
+
+目前可复用原生文件读写/编辑、图片读取、glob/grep、终端及后台作业查询、网页搜索/读取、技能和任务清单。微信侧继续单独提供 Apple/地图、用户记忆、当前会话历史、微信定时消息；同名历史和调度工具在当前 Agent 范围内覆盖宿主版本。Telos 人设覆盖宿主编程人设，保留原生工具说明。普通 DSH 会话不因此获得 Telos 工具。
+
+以下属于渠道或会话生命周期能力，本阶段不开放：桌面问答框、计划审批、展示面板、跨会话检索，以及子 Agent/工作流和自主目标。它们需要额外的微信交互或异步结果投递适配，不能仅暴露工具名称。微信用户工作目录保持固定，以保留用户记忆的加载范围。微信提问继续使用 `ask_user`；定时任务继续走当前微信会话绑定的原生调度服务。原生后台作业由 `job_output` 等工具查询；完成通知沿用已有定时消息的微信回执投递和去重机制，作为非用户输入处理，不能批准 Apple 写入。文件结果目前不支持附件回传。
+
+执行仍经过 DSH 的原生权限与沙箱，不自动批准权限提升。宿主要求交互授权时，需要在宿主处理，微信回复不替代宿主授权。工具继承不是安全沙箱：文件和终端可访问的范围由宿主权限决定；当前会话历史工具的限制也不等于操作系统级文件隔离。不要将此模式作为对不可信微信用户开放整台 Mac 的安全方案。
+
+`tests/test_host_tools.py` 使用隔离桌面/CLI 宿主，验证宿主新增工具自动继承、原生文件实际读写/编辑/搜索、宿主拒绝策略、禁用工具调用失败、当前会话限制和重启。既有历史压缩、用户记忆、直接写入/撤销、调度、文件技能测试继续覆盖各自边界。测试无需修改用户现用安装。
 
 ## 发布与文档同步
 

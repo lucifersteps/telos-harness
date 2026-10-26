@@ -6,18 +6,16 @@ import {admitEncodedImages} from '@deepseek-ai/dsh-attachment';
 import {transcribeVoice} from './voice.mjs';
 import {post} from './bridge.mjs';
 import * as SkillFilesystem from '@deepseek-ai/dsh-skill-filesystem';
-import * as SkillTool from '@deepseek-ai/dsh-tool-skill';
-import * as TodoTool from '@deepseek-ai/dsh-tool-todo';
-import * as WebTool from '@deepseek-ai/dsh-tool-web';
 import SqliteSessionQuery from '@deepseek-ai/dsh-session-query-sqlite';
 import {mountHistoryTools} from './history.mjs';
-import {createScheduler,mountScheduleTools,scheduleDelivery,conversationTurns} from './schedule.mjs';
+import {createScheduler,mountScheduleTools,scheduleDelivery,conversationTurns,isBackgroundMessage} from './schedule.mjs';
 import BasicCompaction from '@deepseek-ai/dsh-compaction-basic';
 import ToolResultPruner from '@deepseek-ai/dsh-compaction-tool-result-pruner';
 import * as Apple from './apple.mjs';
 import * as Maps from './maps.mjs';
 import {mountUserMemory} from './memory.mjs';
 import {mountDocumentTools} from './documents.mjs';
+import {mountHostTools} from './host-tools.mjs';
 export const name='telos-wechat';
 export const inject=['agents','sessions','sessionQuery','sessionPersistence','storageDomain','systemPrompt','attachments','agentDefaultModel','telosBusiness','workingDirectory','tools'];
 export async function apply(ctx) {
@@ -47,36 +45,31 @@ export async function apply(ctx) {
   await history.plugin(SqliteSessionQuery,{path:':memory:',openAt:'first-search',readWindowMax:10});
   async function setup(scope,agent,memoryDirectory) {
     let businessContext;
-    // Desktop moves compaction out of dsh-base into UI presets. WeChat creates
-    // agents directly, so mount the same native backend in this agent's scope.
-    // CLI already supplies one; keep its policy and avoid duplicate hooks.
-    if(!scope.get('compaction')) {
+    const presets=await mountHostTools(scope,agent);
+    // Reuse the preset's isolated compaction hooks as well as CLI's provider.
+    if(!scope.get('compaction')&&!presets?.serviceFor(agent,'compaction')) {
       const compression=scope.isolate('compaction').isolate('toolResultPruner');
       await compression.plugin(ToolResultPruner,{thresholdChars:8192,headChars:4096,tailChars:1024});
       await compression.plugin(BasicCompaction);
     }
-    // Complete, composed rules + selected persona belong only to this WeChat scope.
-    // Native resume runs the same setup, without rewriting history or business state.
-    scope.systemPrompt.section({name:'telos:rules',order:0,text:prompt,complete:true,interpolate:false});
+    // Override the host's coding persona while retaining native tool guidance.
+    // Native resume runs the same setup without rewriting conversation history.
+    scope.systemPrompt.section({name:'deployment:persona-prefix',order:0,text:prompt,interpolate:false});
+    scope.systemPrompt.section({name:'deployment:persona-suffix',order:0,text:'',interpolate:false});
     await mountUserMemory(scope,agent,memoryDirectory);
     await mountDocumentTools(scope,agent);
     mountHistoryTools(scope,agent,history.get('sessionQuery'));
     {
       await scope.plugin(SkillFilesystem,{customSkillDirs:[fileURLToPath(new URL('./document-skills/',import.meta.url)),...(service.tools?.maps===false?[]:[service.skillsDir])],includeDefaultRoots:true,watch:false});
-      await scope.plugin(SkillTool);
-      await scope.plugin(TodoTool,{allowParallelInProgress:false});
       await mountScheduleTools(scope,scheduler.scope);
-      // Register locally in both hosts; inherited tools remain restricted below.
-      await scope.plugin(WebTool,{search:true,fetch:true,searchTimeoutMs:60000});
       await scope.plugin(Apple);
       if(service.tools?.maps!==false)await scope.plugin(Maps);
     }
-    scope.tools.restrict({allow:[]});
     agent.ctx.on('agent/pre-step',async ({step,messages,signal},next)=>{
       if(step>service.maxSteps)throw new Error('本轮已达到步骤限额，保留会话等待继续。');
       if(messages.length)await post(service,'/prepare',{session:agent.session.id,
         messages:messages.map(m=>({id:m.id,hasMedia:m.content.some(b=>b.type!=='text'),
-          scheduled:m.source?.kind==='schedule',text:m.source?.kind==='schedule'?m.content.filter(b=>b.type==='text').map(b=>b.text).join(''):undefined}))},signal);
+          scheduled:isBackgroundMessage(m),text:isBackgroundMessage(m)?m.content.filter(b=>b.type==='text').map(b=>b.text).join(''):undefined}))},signal);
       // DSH assembles sections BEFORE pre-step, but projects their context in next().
       // Fill the same section after confirmation so this request sees its receipt.
       const state=await post(service,'/context',{session:agent.session.id},signal);
