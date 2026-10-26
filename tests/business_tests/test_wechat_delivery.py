@@ -196,6 +196,22 @@ def test_chat_has_no_bubble_count_limit():
     assert split_reply_bubbles('你好\r\n\r\n---\n今天怎么样？') == ['你好', '今天怎么样？']
 
 
+def test_wechat_list_is_one_bubble_with_its_heading():
+    from telos.adapters.wechat.outbound import WeChatOutbound
+    from telos.adapters.base import SendResult
+    listing = '**笔记（2 篇）**\n- 研究演讲.md\n- 金字塔原理.md'
+    sent = []
+    async def send(ref, text):
+        sent.append(text)
+        return SendResult(ok=True)
+    async def run():
+        return await WeChatOutbound(config=WeChatConfig(), send_text_fn=send).send_text(
+            ConversationRef(platform='wechat', chat_id='user'), '这次读到了。\n\n'+listing+'\n\n还有参考资料。')
+    result = asyncio.run(run())
+    assert result.ok and result.message_count == 3
+    assert sent == ['这次读到了。', listing, '还有参考资料。']
+
+
 def test_partial_preview_delivery_does_not_send_followup():
     from telos.adapters.wechat.outbound import WeChatOutbound
     from telos.adapters.base import SendResult

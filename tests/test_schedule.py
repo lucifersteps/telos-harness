@@ -97,6 +97,22 @@ def test_scheduled_output_retry_resumes_after_last_acknowledged_part(tmp_path):
         finally:await h.close()
     asyncio.run(run())
 
+def test_scheduled_list_is_staged_and_delivered_as_one_bubble(tmp_path):
+    async def run():
+        h=Harness(tmp_path,[])
+        listing='**答辩笔记**\n- 研究演讲\n- 金字塔原理'
+        try:
+            h.runtime.bind_ref(h.session,h.ref)
+            await h.runtime.stage_scheduled({'session':h.session,'seq':17,'text':'查询完成。\n\n'+listing,'inputs':[]})
+            with h.runtime.business.db() as db:
+                parts=json.loads(db.execute('SELECT parts FROM schedule_outbox').fetchone()[0])
+            assert parts==['查询完成。',listing]
+            await h.runtime.drain_scheduled()
+            assert h.sent==parts
+        finally:await h.close()
+    asyncio.run(run())
+
+
 def test_completed_output_recovers_from_native_log_without_model_reexecution(tmp_path):
     async def run():
         h=Harness(tmp_path,[create('lost-output',1),'已设置。','待恢复的定时回复。'])

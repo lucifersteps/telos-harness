@@ -39,6 +39,8 @@ Apple 权限授予独立的「Telos Apple」，桌面版和 CLI 使用同一路�
 
 ## 发布与文档同步
 
+微信回复分泡由 `checkout/src/telos/adapters/delivery.py` 统一处理：普通聊天按完整想法分泡，列表标题、列表项目及缩进内容作为一条消息，代码块和业务预览保留完整换行；定时投递复用相同逻辑。单条超长时仍按微信长度限制分段。`tests/business_tests/test_delivery.py` 与 `test_wechat_delivery.py` 覆盖分泡及发送，`tests/test_list_bubbles_hosts.py` 验证安装包在官方 CLI/Desktop 中的实际投递与重启。
+
 文件读取回归使用 `tests/test_documents.py`。设置 `TELOS_TEST_ARCHIVE` 指向待验证的安装包、`TELOS_TEST_DESKTOP_APP` 指向官方桌面应用；CLI 可另外设置 `TELOS_TEST_PRIMARY_RUNTIME` 指向官方 primary-runtime，未指定时测试可复用该桌面应用的 runtime 资源。Word/Excel 测试依赖官方运行环境，不依赖 Telos 自带解析库。`tests/fixtures/documents/` 仅包含虚构会议、空白页与测试密码 PDF，不含用户资料。部署 CLI 的环境准备见 [安装指南](../install-for-ai.md#cli-office)。
 
 发布新版本时，上传同一构建产生的 `.tgz` 和 `.tgz.sha256`，注明宿主版本、平台与签名状态；同步首页的开发版/发布版状态，以及 AI 安装指南中的版本。安装包内 README 来自 `packaging/README.md`。不要仅更新源码后就把开发包写成已发布版本。
