@@ -1,3 +1,10 @@
+## 2026-10-27 — Apple 版本误冲突与原生分区参数修复（候选）
+
+- 故障复现为连续三次只读同一事项，真实字段和修改时间不变，只有 `section_read_error` 中的 NSError 地址变化；旧版本对完整 payload 计算版本，并在原生保存前再次比较，因而误报冲突。
+- Python 版本计算、原生事项比较及目标父任务比较均只排除顶层诊断文字。真实状态、未知分区值和修改时间仍参与比较，原始诊断仍可读取。分区查询补齐 macOS 27 必需的顶层 Bool 参数 `fetchPredefinedGroceryListSections=false`，保留既有配置与未知归属语义。
+- Apple 业务回归 164 passed；两个 Swift/Foundation 契约测试及完整 helper typecheck 通过；候选包的工具/Skill 边界、官方 CLI/Desktop 保存撤销和包清单复验 4 passed。诊断变化后的修改、删除及撤销可通过，真实字段并发修改继续拒绝。
+- 构建 `telos-harness-0.4.16-dev.1-macos-arm64.tgz`，SHA256 `dfc32957d6453e8ae963bea7d41b8fab4044f3794fff38a15b000b0463ba7724`。新原生组件签名需要重新确认系统访问授权；真实 Apple 读写验证尚待完成。现用安装与既有事项保持原状，未发布 Release。
+
 ## 0.4.15 — 正式发布验证（2026-10-26）
 
 - 桌面复用 DSH 标准 Agent 预设，CLI 继承宿主通用工具，保留原生工具说明及执行权限策略。微信暂不开放桌面交互、跨会话控制、工作目录切换、子 Agent/工作流和自主目标；后台作业完成通知复用非人工输入保护与持久投递。

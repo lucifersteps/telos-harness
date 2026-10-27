@@ -562,6 +562,14 @@ func setFields(_ item: EKCalendarItem, fields: [String: Any]) throws {
     }
 }
 
+func comparableAppleState(_ value: [String: Any]) -> [String: Any] {
+    // Diagnostic NSError descriptions may contain process-specific addresses.
+    // Keep the actual section value (including unknown/null) in the baseline.
+    var state = value
+    state.removeValue(forKey: "section_read_error")
+    return state
+}
+
 func write(_ request: [String: Any], action: String) throws -> [String: Any] {
     let kind = text(request["kind"])
     if !["reminder", "event"].contains(kind) { throw Failure(code: "invalid_kind", message: "无效的事项类型。") }
@@ -575,7 +583,7 @@ func write(_ request: [String: Any], action: String) throws -> [String: Any] {
     } else {
         item = try target(request, kind: kind, id: text(request["id"]))
         let expected = request["expected"] as? [String: Any] ?? [:]
-        if try expected.isEmpty || !NSDictionary(dictionary: payload(item)).isEqual(to: expected) {
+        if try expected.isEmpty || !NSDictionary(dictionary: comparableAppleState(payload(item))).isEqual(to: comparableAppleState(expected)) {
             throw Failure(code: "conflict", message: "事项已被修改，操作未执行。请重新查询并确认。")
         }
     }
@@ -1270,6 +1278,13 @@ func nativeSection(_ native: PersonalReminderContainers, _ id: String) throws ->
 }
 // One request/process only; invalidated after every save. No persistent store.
 var membershipCache:[String:[String:String]] = [:]
+func sectionInvocationParameters(_ listID: String) -> [String: Any] {
+    let configuration:[String:Any] = ["sortingStyle":["base":"manual"],"showCompleted":["base":"on"],
+        "countCompleted":true,"remindersPrefetch":["base":"none"],"fetchSubtasks":"on"]
+    // macOS 27 requires this Bool beside list and configuration when decoding.
+    return ["list":["objectIDUUID":listID],"fetchPredefinedGroceryListSections":false,"configuration":configuration]
+}
+
 func sectionMemberships(_ list: NSObject) throws -> [String:String] {
     let id=remID(list)
     if let cached=membershipCache[id] { return cached }
@@ -1284,9 +1299,7 @@ func sectionMemberships(_ list: NSObject) throws -> [String:String] {
         throw Failure(code:"unsupported_private_feature",message:"当前系统未提供分区模型读取接口。")
     }
     // Native ListSectionsInvocation uses Codable property lists and an object-ID/storage dictionary.
-    let configuration:[String:Any] = ["sortingStyle":["base":"manual"],"showCompleted":["base":"on"],
-        "countCompleted":true,"remindersPrefetch":["base":"none"],"fetchSubtasks":"on"]
-    let parameters:[String:Any] = ["list":["objectIDUUID":id],"configuration":configuration]
+    let parameters=sectionInvocationParameters(id)
     let data=try PropertyListSerialization.data(fromPropertyList:parameters,format:.binary,options:0)
     let selector=NSSelectorFromString("resultFromPerformingSwiftInvocation:parametersData:storages:error:")
     guard let method=class_getInstanceMethod(type(of:nativeStore),selector) else { throw Failure(code:"unsupported_private_feature",message:"系统缺少分区查询接口。") }
@@ -1512,7 +1525,7 @@ func validateReminderRelations(_ request:[String:Any], _ item:EKReminder, fields
         guard let id=fields[field] as? String, !id.isEmpty else { continue }
         let actual = kind=="reminder" ? try payload(target(request,kind:kind,id:id)) : try extraContainerDetail(request.merging(["kind":kind,"id":id]){_,n in n})
         let expected = (request["expected_references"] as? [String:[String:Any]])?[field]
-        guard let expected, NSDictionary(dictionary:actual).isEqual(to:expected) else { throw Failure(code:"conflict",message:"目标父任务或分区变化，请重新确认。") }
+        guard let expected, NSDictionary(dictionary:comparableAppleState(actual)).isEqual(to:comparableAppleState(expected)) else { throw Failure(code:"conflict",message:"目标父任务或分区变化，请重新确认。") }
         guard text(actual["calendar_id"])==item.calendar.calendarIdentifier else { throw Failure(code:"invalid_fields",message:"父任务、分区和事项必须属于同一清单。") }
         if field=="section_id" && !text(current["parent_id"]).isEmpty { throw Failure(code:"invalid_fields",message:"子任务随父任务归属分区，请修改父任务的分区。") }
         if field=="parent_id" {
