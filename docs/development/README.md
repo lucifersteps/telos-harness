@@ -44,7 +44,7 @@ Apple 权限授予独立的「Telos Apple」，桌面版和 CLI 使用同一路�
 
 目前可复用原生文件读写/编辑、图片读取、glob/grep、终端及后台作业查询、网页搜索/读取、技能和任务清单。微信侧继续单独提供 Apple/地图、用户记忆、当前会话历史、微信定时消息；同名历史和调度工具在当前 Agent 范围内覆盖宿主版本。Telos 人设覆盖宿主编程人设，保留原生工具说明。普通 DSH 会话不因此获得 Telos 工具。
 
-以下属于渠道或会话生命周期能力，本阶段不开放：桌面问答框、计划审批、展示面板、跨会话检索，以及子 Agent/工作流和自主目标。它们需要额外的微信交互或异步结果投递适配，不能仅暴露工具名称。微信用户工作目录保持固定，以保留用户记忆的加载范围。微信提问继续使用 `ask_user`；定时任务继续走当前微信会话绑定的原生调度服务。原生后台作业由 `job_output` 等工具查询；完成通知沿用已有定时消息的微信回执投递和去重机制，作为非用户输入处理，不能批准 Apple 写入。文件结果目前不支持附件回传。
+以下属于渠道或会话生命周期能力，本阶段不开放：桌面问答框、计划审批、展示面板、跨会话检索，以及子 Agent/工作流和自主目标。它们需要额外的微信交互或异步结果投递适配，不能仅暴露工具名称。微信用户工作目录保持固定，以保留用户记忆的加载范围。微信提问继续使用 `ask_user`；定时任务继续走当前微信会话绑定的原生调度服务。原生后台作业由 `job_output` 等工具查询；完成通知沿用已有定时消息的微信回执投递和去重机制，作为非用户输入处理，不能批准 Apple 写入。公网图片可通过 `send_wechat_image` 回传；本地文件结果和其他附件尚不支持回传。
 
 执行仍经过 DSH 的原生权限与沙箱，不自动批准权限提升。宿主要求交互授权时，需要在宿主处理，微信回复不替代宿主授权。工具继承不是安全沙箱：文件和终端可访问的范围由宿主权限决定；当前会话历史工具的限制也不等于操作系统级文件隔离。不要将此模式作为对不可信微信用户开放整台 Mac 的安全方案。
 
@@ -65,3 +65,5 @@ Apple 权限授予独立的「Telos Apple」，桌面版和 CLI 使用同一路�
 Apple 扩展能力的验证入口：`tests/business_tests/test_extended_apple.py`（参数/预览/筛选）、`tests/test_extended_apple_live.py`（显式 `TELOS_EXTENDED_LIVE=1`，独立已授权测试组件和临时数据）、`tests/test_extended_apple_hosts.py`（桌面/CLI 宿主）。具体范围和版本记录见 [validation.md](validation.md)。
 
 直接写入回归：`tests/test_direct_write.py` 覆盖策略、幂等、撤销冲突、中断恢复与回执重投；`tests/test_direct_write_hosts.py` 使用隔离 CLI/Desktop Host 验证开关、重启和旧确认流程；`TELOS_DIRECT_LIVE=1` 显式启用 `tests/test_direct_write_live.py`，使用独立已授权 Apple 测试组件和临时数据，不操作现有安排。
+
+图片发送由 `plugin/images.mjs` 注册、`image_delivery.py` 绑定当前会话并保存分段回执，`checkout/src/telos/adapters/wechat/image_outbound.py` 负责限量下载、WebP 转 PNG、AES-128-ECB/PKCS7 上传及 iLink 发送。`tests/test_image_delivery.py` 覆盖真实 DSH 宿主工具调用、加密载荷、收件人隔离、重放去重、部分失败和网络地址限制。

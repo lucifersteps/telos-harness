@@ -1,0 +1,12 @@
+import {post} from './bridge.mjs';
+export function mountImageTools(scope,service) {
+  scope.tools.register({
+    name:'send_wechat_image',
+    description:'Send a PNG/JPEG/WebP image from a public HTTP(S) URL to the CURRENT WeChat conversation. Optionally send title, summary and a clickable original link together as one text message after the image. Use for requested image delivery or Xiaohongshu note recommendations/shares. No recipient parameter. Only report success when status is sent; never automatically retry unknown/partial delivery.',
+    parameters:{type:'object',properties:{image_url:{type:'string',description:'Actual PNG/JPEG/WebP cover URL obtained from source tools.'},title:{type:'string',maxLength:150},summary:{type:'string',maxLength:1000},link_url:{type:'string',description:'Complete original HTTP(S) note link. Preserve xsec_token and other query parameters; never invent tokens.'}},required:['image_url'],additionalProperties:false},
+    output:{schema:{type:'object',additionalProperties:true},render:(_args,value)=>[{type:'text',text:JSON.stringify(value)}]},
+    execute:async(args,exec)=>post(service,'/send-image',{session:exec.agent.session.id,id:exec.callId,args},exec.signal)
+  });
+  scope.systemPrompt.section({name:'telos:images',order:0,interpolate:false,text:
+    'You can send images to the current WeChat conversation with send_wechat_image. When the user requests sharing/recommending Xiaohongshu notes, obtain genuine cover, title, details and full usable note URL from the Xiaohongshu tools, then send each selected note as cover + concise title/summary + original link using this tool. Prefer a genuine short share URL returned by the source when available. Never fabricate short URLs, remove required access parameters, or format Markdown/HTML titles as if WeChat supports hidden hyperlinks; this channel sends plain text. Preserve access query parameters. Never invent note URLs or claim an image was sent without a successful receipt. If image download/upload fails before sending, explain and provide the title, summary and original link as text. For partial/unknown results do not retry automatically; explain what is confirmed. If requires_new_message is true, ask the user for a new WeChat message to refresh the reply window; do not keep retrying. Do not duplicate a successfully sent caption/link in the final reply. Images are separate messages, not clickable native link cards. This tool accepts public PNG/JPEG/WebP URLs up to 10 MiB; local files and other file attachments cannot be sent through it.'});
+}

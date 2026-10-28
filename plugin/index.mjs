@@ -16,6 +16,7 @@ import * as Maps from './maps.mjs';
 import {mountUserMemory} from './memory.mjs';
 import {mountDocumentTools} from './documents.mjs';
 import {mountHostTools} from './host-tools.mjs';
+import {mountImageTools} from './images.mjs';
 export const name='telos-wechat';
 export const inject=['agents','sessions','sessionQuery','sessionPersistence','storageDomain','systemPrompt','attachments','agentDefaultModel','telosBusiness','workingDirectory','tools'];
 export async function apply(ctx) {
@@ -58,6 +59,7 @@ export async function apply(ctx) {
     scope.systemPrompt.section({name:'deployment:persona-suffix',order:0,text:'',interpolate:false});
     await mountUserMemory(scope,agent,memoryDirectory);
     await mountDocumentTools(scope,agent);
+    mountImageTools(scope,service);
     mountHistoryTools(scope,agent,history.get('sessionQuery'));
     {
       await scope.plugin(SkillFilesystem,{customSkillDirs:[fileURLToPath(new URL('./document-skills/',import.meta.url)),...(service.tools?.maps===false?[]:[service.skillsDir])],includeDefaultRoots:true,watch:false});

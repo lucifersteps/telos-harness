@@ -17,7 +17,7 @@ installed/
 # Local user state and build-only dependencies
 user.md
 users/
-wechat/
+/wechat/
 media/
 .dsh/
 config.json
