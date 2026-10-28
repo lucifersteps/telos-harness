@@ -39,6 +39,37 @@ def test_reply_preserves_preview_between_lists():
     ]
 
 
+def test_reply_protects_saved_card_and_preview_without_merging_other_content():
+    saved = '**已保存**\n```text\n标题：任务一\n```\n回复“撤销”可撤销'
+    preview = '**删除提醒事项**\n```text\n标题：任务二\n```\n回复【1】确认，回复【2】取消'
+    listing = '**补充说明**\n- 第一项\n- 第二项'
+    text = saved + '\n\n写入成功。\n\n' + listing + '\n\n' + preview + '\n稍后再处理其他事项。'
+    assert split_reply_bubbles(text, protected_texts={preview, saved}) == [
+        saved, '写入成功。', listing, preview, '稍后再处理其他事项。',
+    ]
+
+
+def test_reply_repeated_protected_block_keeps_each_source_occurrence_once():
+    card = '**操作预览**\n内容\n回复【1】确认'
+    text = card + '\n再次说明。\n' + card
+    assert split_reply_bubbles(text, protected_text=card, protected_texts=[card, card, '', '不在原文中的块']) == [
+        card, '再次说明。', card,
+    ]
+
+
+def test_reply_prefers_complete_card_when_protected_blocks_overlap():
+    card = '**操作预览**\n内容\n回复【1】确认'
+    assert split_reply_bubbles(card+'\n最后补充。', protected_texts=[card, '**操作预览**', '内容\n回复【1】确认']) == [
+        card, '最后补充。',
+    ]
+
+
+def test_reply_keeps_adjacent_cards_and_crlf_exactly():
+    first = '已保存\r\n标题：任务一\r\n可撤销'
+    second = '待确认\r\n标题：任务二\r\n回复1'
+    assert split_reply_bubbles(first+second, protected_text=first, protected_texts=[second]) == [first, second]
+
+
 def test_delivery_splits_on_standalone_separator() -> None:
     text = "行，那赛后集锦是你摸鱼的罪证了是吧。\n---\n这几场打得怎么样，有没有值得回味的回合。"
 

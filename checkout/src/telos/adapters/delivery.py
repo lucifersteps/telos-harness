@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Iterable
 from contextvars import ContextVar
 from typing import Any
 
@@ -159,6 +159,7 @@ async def send_text_in_bubbles(
     max_text_chars: int,
     split_multiline: bool = False,
     protected_text: str = "",
+    protected_texts: Iterable[str] | None = None,
 ) -> SendResult:
     """Split ``text`` into bubbles/chunks and deliver them one by one.
 
@@ -166,7 +167,7 @@ async def send_text_in_bubbles(
     """
 
     parts: list[str] = []
-    bubbles = (split_reply_bubbles(text, protected_text=protected_text)
+    bubbles = (split_reply_bubbles(text, protected_text=protected_text, protected_texts=protected_texts)
                if split_multiline else split_message_bubbles(text, max_bubbles=max_bubbles))
     for bubble in bubbles:
         parts.extend(split_text_by_length(bubble, max_text_chars))
@@ -188,17 +189,33 @@ async def send_text_in_bubbles(
     return SendResult(ok=True, message_id=last.message_id, message_count=sent_count)
 
 
-def split_reply_bubbles(text: str, *, protected_text: str = "") -> list[str]:
+def split_reply_bubbles(
+    text: str, *, protected_text: str = "", protected_texts: Iterable[str] | None = None,
+) -> list[str]:
     """One thought per bubble, preserving lists, code and authoritative previews.
 
     This is only presentation: no extra model turns, markers or persisted state.
     Plain chat lines split individually; structured blocks retain their newlines.
     All content is delivered without a bubble count limit.
     """
-    if protected_text and protected_text in text:
-        before, _, after = text.partition(protected_text)
-        return [*_split_chat_bubbles(before), protected_text, *_split_chat_bubbles(after)]
-    return _split_chat_bubbles(text)
+    spans: list[tuple[int, int]] = []
+    for block in {part for part in (protected_text, *(protected_texts or ())) if part}:
+        offset = 0
+        while (start := text.find(block, offset)) != -1:
+            end = start + len(block)
+            spans.append((start, end))
+            offset = end
+    bubbles: list[str] = []
+    cursor = 0
+    # Match source order, preferring a whole card over a contained fragment.
+    for start, end in sorted(spans, key=lambda span: (span[0], -span[1])):
+        if start < cursor:
+            continue
+        bubbles.extend(_split_chat_bubbles(text[cursor:start]))
+        bubbles.append(text[start:end])
+        cursor = end
+    bubbles.extend(_split_chat_bubbles(text[cursor:]))
+    return bubbles
 
 
 def compact_json(payload: dict[str, Any]) -> str:

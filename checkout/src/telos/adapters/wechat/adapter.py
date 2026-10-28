@@ -8,7 +8,7 @@ import logging
 import time
 from collections import deque
 from collections.abc import AsyncIterator
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -195,8 +195,13 @@ class WeChatAdapter:
         self._recorded_inputs.clear()
         return recorded
 
-    async def send_text(self, ref: ConversationRef, text: str, *, protected_text: str = "") -> SendResult:
-        return await self.outbound.send_text(ref, text, protected_text=protected_text)
+    async def send_text(
+        self, ref: ConversationRef, text: str, *, protected_text: str = "",
+        protected_texts: Iterable[str] | None = None,
+    ) -> SendResult:
+        return await self.outbound.send_text(
+            ref, text, protected_text=protected_text, protected_texts=protected_texts,
+        )
 
     async def request_approval(
         self,

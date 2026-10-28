@@ -18,7 +18,7 @@ ROOT=Path(__file__).resolve().parents[1]
 def run(*args):subprocess.run([str(a) for a in args],check=True,cwd=ROOT)
 
 def main():
-    parser=argparse.ArgumentParser();parser.add_argument('--version',default='0.4.15');parser.add_argument('--reuse-components',action='store_true')
+    parser=argparse.ArgumentParser();parser.add_argument('--version',default='0.4.16');parser.add_argument('--reuse-components',action='store_true')
     parser.add_argument('--reuse-apple',action='store_true',help='Preserve the existing signed Apple component while rebuilding Python')
     parser.add_argument('--sign-identity',default='-',help='Developer ID Application identity; - is local ad-hoc validation only')
     args=parser.parse_args()
@@ -71,7 +71,7 @@ def main():
     shutil.copytree(build/'native',package/'native')
     collect_licenses(ROOT,package)
     files={str(p.relative_to(package)):hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(package.rglob('*')) if p.is_file()}
-    (package/'component-manifest.json').write_text(json.dumps({'version':args.version,'harness':'0.2.1rc2',
+    (package/'component-manifest.json').write_text(json.dumps({'version':args.version,'harness':metadata['engines']['dsh'],
         'platform':'macos-arm64','min_macos':'14','files':files},indent=2)+'\n')
     archive=dist/f'telos-harness-{args.version}-macos-arm64.tgz'
     temporary=archive.with_suffix('.tgz.tmp')

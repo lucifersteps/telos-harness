@@ -9,7 +9,7 @@ import logging
 import secrets
 import struct
 import time
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Iterable
 from typing import Any
 from urllib import request as urllib_request
 
@@ -44,7 +44,10 @@ class WeChatOutbound:
         self.config = config
         self.send_text_fn = send_text_fn
 
-    async def send_text(self, ref: ConversationRef, text: str, *, protected_text: str = "") -> SendResult:
+    async def send_text(
+        self, ref: ConversationRef, text: str, *, protected_text: str = "",
+        protected_texts: Iterable[str] | None = None,
+    ) -> SendResult:
         return await send_text_in_bubbles(
             self.send_text_fn,
             ref,
@@ -53,6 +56,7 @@ class WeChatOutbound:
             max_text_chars=self.config.max_text_chars,
             split_multiline=self.config.split_multiline_messages,
             protected_text=protected_text,
+            protected_texts=protected_texts,
         )
 
 

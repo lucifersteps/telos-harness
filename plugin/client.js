@@ -57,8 +57,9 @@ window.__ModuleLoader__.load({id:'telos-harness',factory:require=>{
           credential(provider?.credentialRef,'模型 API Key'),
           selection&&provider?.credentialRef&&!provider.models.length?small('保存 Key 后刷新模型列表，也可手动填写模型 ID。'):null,
           provider?.id==='deepseek-account'||!provider?h('div',{className:'t-actions'},button('登录 DeepSeek 账号',()=>perform(async()=>{
+            if(typeof state?.dshVersion!=='string'||!state.dshVersion.trim())throw new Error('无法读取 DSH 宿主版本，请刷新页面后重试登录。');
             try{const desktop='dshDesktop' in globalThis,transport=globalThis.__DSH_TRANSPORT__;
-              const r=await account.current.startSignIn({version:'0.2.1-rc.2',locale:'zh',timezoneOffsetSeconds:-new Date().getTimezoneOffset()*60},desktop&&transport?.streamBaseUrl?new URL(transport.streamBaseUrl).origin:window.location.origin,desktop?'desktop':'web');if(!r?.ok)throw new Error();setNotice('请在 DSH 原生登录窗口完成登录，再刷新模型列表。');}
+              const r=await account.current.startSignIn({version:state.dshVersion,locale:'zh',timezoneOffsetSeconds:-new Date().getTimezoneOffset()*60},desktop&&transport?.streamBaseUrl?new URL(transport.streamBaseUrl).origin:window.location.origin,desktop?'desktop':'web');if(!r?.ok)throw new Error();setNotice('请在 DSH 原生登录窗口完成登录，再刷新模型列表。');}
             catch{throw new Error('无法打开 DSH 登录，请检查宿主账号服务。');}
           }),!account.current)):null,
           h('div',{className:'t-actions'},button('测试连接',()=>perform(async()=>setNotice((await modelAction('test',{selection})).message))),button('刷新模型',()=>perform(async()=>{const v=await loadCatalog();await describe(v.providers.map(p=>p.credentialRef).filter(Boolean));setNotice('已刷新 DSH 模型目录。');}))),small('测试连接会发送一条测试文字，产生少量调用费用。'),

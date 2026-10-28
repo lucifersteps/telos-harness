@@ -22,7 +22,9 @@ def canonical(value: object) -> str:
 
 
 def revision(item: dict[str, Any]) -> str:
-    return hashlib.sha256(canonical(item).encode()).hexdigest()
+    """Version object state, excluding the section-read diagnostic text only."""
+    state = {key: value for key, value in item.items() if key != "section_read_error"}
+    return hashlib.sha256(canonical(state).encode()).hexdigest()
 
 
 def operation_key(session_id: str, turn_id: str, tool_call_id: str) -> str:

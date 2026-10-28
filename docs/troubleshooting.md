@@ -8,7 +8,7 @@
 ## 仓库或 Release 打不开，找不到安装包
 
 - 从仓库 Releases 页面进入当前版本；如果旧版本附件不可见，使用当前发布包。公开附件无需 GitHub 账号。
-- 本版安装包与校验文件位于 [0.4.15 Release](https://github.com/lucifersteps/telos-harness/releases/tag/v0.4.15)。仍看不到附件时，核对版本和下载状态，联系维护者；不拼接猜测的下载链接。
+- 本版安装包与校验文件位于 [0.4.16 Release](https://github.com/lucifersteps/telos-harness/releases/tag/v0.4.16)。仍看不到附件时，核对版本和下载状态，联系维护者；不拼接猜测的下载链接。
 - 下载的是 `.tgz` Release 附件；GitHub 自动提供的 Source code ZIP/tar.gz 不能当作自包含插件包安装。
 - SHA256 不匹配时停止安装并重新下载。缺少校验附件可核对 GitHub 资产 `digest` 或维护者提供的值；不要把自己刚算出的哈希作为期望值。
 - `gh` 未安装、未登录或 GitHub API 返回限流错误时，使用 [无需账号的直接下载命令](install-for-ai.md#download)。API 的 403 不代表公开 Release 必须登录。
@@ -126,6 +126,12 @@ Telos 复用 DSH 网页服务，不另存一套搜索密钥；具体后端可能
 完整限制和数据保存方式见[文件读取说明](../packaging/README.md#微信文件读取)。
 
 <a id="restart"></a>
+## DSH 升级后提示 Telos 不兼容
+
+0.4.15 及 0.4.16-dev.2 的 `engines.dsh` 精确锁定 `0.2.1-rc.2`，升级 DSH 到 rc.3 会被宿主拒绝加载；该兼容性提示本身不表示已经发生崩溃或数据损坏。升级 Telos 到 0.4.16，保留原 profile、数据目录、配置及微信登录状态，无需先卸载或清空数据。
+
+0.4.16 声明范围 `>=0.2.1-rc.2 <0.3.0-0`，已验证 rc.2 / rc.3；更高版本超出此范围时应查看新版本兼容说明，不手动移除宿主的兼容性检查。
+
 ## 升级后还是旧行为，重启后像全新安装
 
 插件列表显示新版本，只能证明文件已更新。退出并重新打开 DSH，或正常停止、重启 CLI，使旧进程和已加载模块换代。

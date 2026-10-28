@@ -83,7 +83,9 @@ class Channel(ScheduledDelivery):
                 # A timer is never a human approval, even if its prompt says '1'.
                 self.known_ref(session)
                 with self.business.db() as db:
-                    db.execute("INSERT OR IGNORE INTO messages(id,session,input,reply,delivered) VALUES(?,?,?,'',1)",(message['id'],session,message.get('text','')))
+                    # Machine prompts live in native history/active context;
+                    # the business inbox's input column denotes human feedback.
+                    db.execute("INSERT OR IGNORE INTO messages(id,session,input,reply,delivered) VALUES(?,?,'','',1)",(message['id'],session))
                 self.business.active[session]={'key':message['id'],'scheduled':True,'text':message.get('text',''),'time':datetime.now().astimezone().isoformat()}
                 continue
             with self.business.db() as db:row=db.execute('SELECT input FROM messages WHERE id=? AND session=?',(message['id'],session)).fetchone()
@@ -106,9 +108,17 @@ class Channel(ScheduledDelivery):
             elif control in {'1','确认','同意'} and (not pending or pending['kind']=='approval'):
                 receipt=await self.business.confirm(session)
             else:
-                if pending and not pending.get('executing'):self.business.set_pending(session,None)
+                if pending and not pending.get('executing'):
+                    if pending['kind']=='question':self.business.set_pending(session,None)
+                    else:
+                        # Feedback is not cancellation. Keep the actual draft,
+                        # but require its current preview to be shown again before
+                        # a later numeric reply can approve it.
+                        pending['delivered']=False
+                        self.business.set_pending(session,pending)
                 continue
-            receipt['control']=undo_control or control not in {'1','确认','同意'}
+            receipt['control']=(undo_control or control not in {'1','确认','同意'}
+                or receipt.get('status') in {'deny','disabled','failed','unavailable'})
             self.business.active[session]['receipt']=receipt
             self.business.save_reply(key,receipt['text'])
         return {}
@@ -145,11 +155,13 @@ class Channel(ScheduledDelivery):
                 # A control-only turn with no further tool work reports its actual
                 # receipt, not an additional model promise to perform the same save.
                 control_only=receipts and all(r[3].strip() in {'1','确认','同意','2','取消','拒绝','/stop'} or re.fullmatch(r'撤销(?:\s+[0-9a-f]{12})?',r[3].strip()) for r in rows)
-                if control_only and not any(e.get('type')=='tool/result' for e in events):
+                if control_only and (self.business.active.get(session,{}).get('receipt',{}).get('control')
+                                     or not any(e.get('type')=='tool/result' for e in events)):
                     reply='\n\n'.join(dict.fromkeys(receipts))
-                else:reply=self.business.render(session,reply)
-                for receipt in receipts:
-                    if receipt not in reply:reply=receipt+'\n\n'+reply
+                else:
+                    for receipt in receipts:
+                        if receipt not in reply:reply=receipt+'\n\n'+reply
+                    reply=self.business.render(session,reply)
                 # Save the combined outbox and retire its input receipts atomically.
                 for earlier,_,_,_ in rows[:-1]:db.execute("UPDATE messages SET reply='',delivered=1 WHERE id=?",(earlier,))
                 db.execute('UPDATE messages SET reply=? WHERE id=?',(reply,target))

@@ -2,7 +2,9 @@
 import {component} from './component.mjs';
 import {voiceStatus} from './voice.mjs';
 import {modelCatalog,validateSelection,addModel,testModel} from './models.mjs';
+import {getDshRuntimeVersion} from '@deepseek-ai/dsh-app-boot';
 export async function mountDesktop(ctx,paths,{readConfig,runtime}) {
+  const dshVersion=getDshRuntimeVersion();
   let fork=null,busy='',error='',qr=null,closed=false;
   const fail=reason=>{if(!closed)error=reason.message;};
   async function stop() {
@@ -30,7 +32,7 @@ export async function mountDesktop(ctx,paths,{readConfig,runtime}) {
     return {...result,config:config?{direct_write:config.direct_write??true,max_steps:config.max_steps,persona:config.persona??'default',persona_file:config.persona_file??'',model_selection:config.model_selection??null,tools:{apple:true,maps:true,...config.tools}}:null,
       model:config?.model_selection??ctx.get('agentDefaultModel')?.currentSelection()??null,
       defaultModel:ctx.get('agentDefaultModel')?.currentSelection()??null,
-      running:!!fork,busy,error,qr,voice:voiceStatus(ctx)};
+      running:!!fork,busy,error,qr,voice:voiceStatus(ctx),dshVersion};
   }
   async function execute(action,data) {
     if(action==='apply'){
