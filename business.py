@@ -21,6 +21,7 @@ from telos.tools.apple.repair import payload
 from telos.tools.apple.service import canonical, operation_key
 from settings import runtime_options
 from telos.tools.apple.direct import direct_allowed
+from text_delivery import init_text_delivery, send_reply_parts
 
 SAVED_UNDO_INSTRUCTION='回复【1】撤销；需要修改时直接回复修改内容'
 SAVED_PENDING_INSTRUCTION='如需撤销这次保存，请先回复“取消”结束当前待处理内容，再回复“撤销”。'
@@ -40,6 +41,7 @@ class Business:
               CREATE TABLE IF NOT EXISTS drafts (session TEXT, id TEXT, origin TEXT, root TEXT, args TEXT, result TEXT, PRIMARY KEY(session,id));
               CREATE TABLE IF NOT EXISTS facts (session TEXT PRIMARY KEY, value TEXT);
             ''')
+        init_text_delivery(self)
         self.maps=BaiduMaps()
         maps_tool=ExecutableTool(name='baidu_maps',description='百度地图只读查询。先用原生 skill 加载 baidu-ai-map；支持地点、路线、地理编码和天气。',
             parameters={'type':'object','properties':{'operation':{'type':'string','enum':list(ENDPOINTS)},
@@ -355,9 +357,9 @@ class Business:
         cards=self.saved_cards(session,row[0])
         # Keep a saved card intact without folding independent answers into it.
         protected=list(dict.fromkeys([r['text'] for r in cards]+([preview] if preview else [])))
-        try:result=await adapter.send_text(ref,row[0],**({'protected_texts':protected} if protected else {}))
+        try:complete=await send_reply_parts(self,session,key,row[0],adapter,ref,protected)
         finally:delivery_log_context.reset(token)
-        if not result.ok:return
+        if not complete:return
         with self.db() as db:db.execute('UPDATE messages SET delivered=1 WHERE id=?',(key,))
         pending=self.pending(session)
         if (pending and pending['kind']=='approval' and pending.get('text') and pending['text'] in row[0]

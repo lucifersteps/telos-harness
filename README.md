@@ -14,7 +14,7 @@
 
 ![Telos 六格漫画：从遗漏安排、反复尝试管理 App，到在微信里发送截图和语音，由 Telos 整理到 Apple 日历与提醒事项，事务虽多依然从容有序。](docs/assets/telos-story.png)
 
-**多一份从容，从 Telos 开始。** [下载安装包](https://github.com/lucifersteps/telos-harness/releases/tag/v0.4.17)，或按下方的[「让 AI 帮你安装」](#让-ai-帮你安装)开始配置。
+**多一份从容，从 Telos 开始。** [下载安装包](https://github.com/lucifersteps/telos-harness/releases/tag/v0.4.18)，或按下方的[「让 AI 帮你安装」](#让-ai-帮你安装)开始配置。
 
 [查看六宫格漫画原图](docs/assets/telos-story.png) · [查看宣传海报（含项目二维码）](docs/assets/telos-poster.png)
 
@@ -45,7 +45,7 @@ Telos 面向使用 **iPhone 和 Mac** 的用户，目前支持 **macOS 14+、App
 
 **文件读取：** 支持在微信发送 PDF、Word（DOCX）、Excel（XLSX）和文本文件。复用 DeepSeek Harness 的 Office 技能与工具；PDF 借助 macOS PDFKit 读取文字层，无需另配解析 API Key。桌面版复用内置环境，独立 CLI 需准备 Office 运行环境。格式限制与数据保存方式见[文件读取说明](packaging/README.md#微信文件读取)。
 
-## 微信图片分享（0.4.17）
+## 微信图片分享（0.4.17 起）
 
 微信会话可通过 `send_wechat_image` 发送公网 PNG/JPEG/WebP 图片（输入及转换结果均最多 10 MiB）。WebP 使用 macOS 系统工具转换为 PNG，不需额外安装图片库。小红书分享先发送封面，再将标题、简短摘要和完整原文链接合并成一条文字消息；图片本身不是可点击链接卡片。
 
@@ -69,9 +69,9 @@ DeepSeek Harness（下文简称 DSH）支持桌面版和 CLI，两种方式使�
 
 安装包自带 Telos 所需的 Python 运行环境和 Apple 组件，无需安装 Python、Homebrew 或 Xcode。选用 Node/CLI 时，仍需要 DSH 对应的 Node.js 运行环境。
 
-**当前版本：0.4.17。** 从 [0.4.17 Release](https://github.com/lucifersteps/telos-harness/releases/tag/v0.4.17) 下载安装包与 SHA256 校验文件。不要把源码 ZIP 当作插件安装包。
+**当前版本：0.4.18。** 从 [0.4.18 Release](https://github.com/lucifersteps/telos-harness/releases/tag/v0.4.18) 下载安装包与 SHA256 校验文件。不要把源码 ZIP 当作插件安装包。
 
-**0.4.17 更新：** 新增公网图片发送，可把封面、标题摘要和完整链接分享到当前微信会话；发送回执持久化，超时或部分成功不自动重发。保留 0.4.16 的 DSH 兼容范围及 Apple、微信预览修复，复用原 Apple 组件。
+**0.4.18 更新：** 修复文字回复发送中断后，重启反复发送开头的问题。逐段保存投递进度；明确拒收时从失败段恢复，结果未知时暂停重发。笔记的标题、摘要和完整链接保持在一条消息中。保留图片发送能力，复用原 Apple 组件。
 
 **0.4.15 引入：** Telos 复用 DSH 已启用的通用工具，包括文件读写、编辑、搜索、终端和后台作业，沿用宿主权限与沙箱。微信列表标题、项目和子项目保留在同一个消息气泡中，代码块保留换行；操作预览与保存卡片仍完整发送。需要桌面交互或跨会话控制的工具暂不向微信开放。
 
@@ -79,7 +79,7 @@ DeepSeek Harness（下文简称 DSH）支持桌面版和 CLI，两种方式使�
 
 当前安装包使用 ad-hoc 签名，尚未完成 Developer ID 公证及另一台实体 Mac 的首次安装验证；如遇系统拦截，见 [排障指南](docs/troubleshooting.md#macos-blocked)。
 
-**插件市场安装来源：** 使用 [0.4.17 预构建安装包](https://github.com/lucifersteps/telos-harness/releases/download/v0.4.17/telos-harness-0.4.17-macos-arm64.tgz)，并核对同一 Release 的 SHA256 文件。仓库根目录的 `package.json` 声明正式插件元数据；源码不包含已编译的 Python 和 Apple 组件，不能直接用 `github:lucifersteps/telos-harness` 代替安装包。市场安装完成后，仍需完成模型配置、微信扫码和 Apple 授权。
+**插件市场安装来源：** 使用 [0.4.18 预构建安装包](https://github.com/lucifersteps/telos-harness/releases/download/v0.4.18/telos-harness-0.4.18-macos-arm64.tgz)，并核对同一 Release 的 SHA256 文件。仓库根目录的 `package.json` 声明正式插件元数据；源码不包含已编译的 Python 和 Apple 组件，不能直接用 `github:lucifersteps/telos-harness` 代替安装包。市场安装完成后，仍需完成模型配置、微信扫码和 Apple 授权。
 
 ## 让 AI 帮你安装
 

@@ -110,7 +110,7 @@ def test_concurrent_duplicate_confirmations_and_failed_delivery_keep_one_write(t
         try:
             await h.submit('创建测试会议')
             send=h.adapter.send_text
-            async def fail(ref,text,**kwargs):return SendResult(ok=False,error='模拟微信失败')
+            async def fail(ref,text,**kwargs):return SendResult(ok=False,error='模拟微信失败',retryable=True)
             h.adapter.send_text=fail
             await asyncio.gather(h.submit('1',key='confirm-a'),h.submit('1',key='confirm-b'))
             assert len(h.native.writes)==1

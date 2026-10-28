@@ -185,7 +185,7 @@ async def test_direct_receipt_delivery_retry_does_not_repeat_write(tmp_path):
         texts=[]
         async def send_text(self,ref,text,**kwargs):
             self.texts.append(text)
-            return SendResult(ok=self.ok)
+            return SendResult(ok=self.ok,retryable=not self.ok)
     adapter=Adapter()
     await b.deliver('s','m1',adapter,None)
     b,_=setup(tmp_path,native=n);adapter.ok=True

@@ -33,7 +33,7 @@ bash run-validation.sh
 构建需要 Xcode Command Line Tools 和上述 Python 依赖：
 
 ```sh
-.venv/bin/python packaging/build.py --version 0.4.17
+.venv/bin/python packaging/build.py --version 0.4.18
 ```
 
 Apple 权限授予独立的「Telos Apple」，桌面版和 CLI 使用同一路径。本版为 ad-hoc 签名：组件内容更新后可能需要重新授权，本机已验证这一限制。正式分发可通过构建参数 `--sign-identity "Developer ID Application: …"` 使用稳定签名；当前尚未完成 Developer ID 签名、公证及另一台实体 Mac 验证。Telos 原创代码采用 MIT；第三方组件遵循各自许可，见根目录 LICENSE、THIRD_PARTY_NOTICES.md 与安装包 licenses/。
@@ -67,3 +67,5 @@ Apple 扩展能力的验证入口：`tests/business_tests/test_extended_apple.py
 直接写入回归：`tests/test_direct_write.py` 覆盖策略、幂等、撤销冲突、中断恢复与回执重投；`tests/test_direct_write_hosts.py` 使用隔离 CLI/Desktop Host 验证开关、重启和旧确认流程；`TELOS_DIRECT_LIVE=1` 显式启用 `tests/test_direct_write_live.py`，使用独立已授权 Apple 测试组件和临时数据，不操作现有安排。
 
 图片发送由 `plugin/images.mjs` 注册、`image_delivery.py` 绑定当前会话并保存分段回执，`checkout/src/telos/adapters/wechat/image_outbound.py` 负责限量下载、WebP 转 PNG、AES-128-ECB/PKCS7 上传及 iLink 发送。`tests/test_image_delivery.py` 覆盖真实 DSH 宿主工具调用、加密载荷、收件人隔离、重放去重、部分失败和网络地址限制。
+
+普通文字投递由 `text_delivery.py` 持久保存分段计划、已确认位置与发送状态。每段发送前记录 sending；仅明确拒收允许从失败段重试，超时、取消及崩溃后结果未知时暂停自动重放。首次升级把旧版无分段回执的未完成回复标记为 legacy_unknown，原文保留。`tests/test_text_delivery.py` 与 `tests/test_text_delivery_hosts.py` 覆盖部分发送恢复、固定消息 ID、未知结果、并发去重和真实编译包重启；标题、摘要及完整 URL 在段落内合并发送。
