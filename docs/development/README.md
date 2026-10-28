@@ -33,7 +33,7 @@ bash run-validation.sh
 构建需要 Xcode Command Line Tools 和上述 Python 依赖：
 
 ```sh
-.venv/bin/python packaging/build.py --version 0.4.15
+.venv/bin/python packaging/build.py --version 0.4.16
 ```
 
 Apple 权限授予独立的「Telos Apple」，桌面版和 CLI 使用同一路径。本版为 ad-hoc 签名：组件内容更新后可能需要重新授权，本机已验证这一限制。正式分发可通过构建参数 `--sign-identity "Developer ID Application: …"` 使用稳定签名；当前尚未完成 Developer ID 签名、公证及另一台实体 Mac 验证。Telos 原创代码采用 MIT；第三方组件遵循各自许可，见根目录 LICENSE、THIRD_PARTY_NOTICES.md 与安装包 licenses/。

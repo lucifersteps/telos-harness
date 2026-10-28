@@ -14,7 +14,7 @@
 
 ![Telos 六格漫画：从遗漏安排、反复尝试管理 App，到在微信里发送截图和语音，由 Telos 整理到 Apple 日历与提醒事项，事务虽多依然从容有序。](docs/assets/telos-story.png)
 
-**多一份从容，从 Telos 开始。** [下载安装包](https://github.com/lucifersteps/telos-harness/releases/tag/v0.4.15)，或按下方的[「让 AI 帮你安装」](#让-ai-帮你安装)开始配置。
+**多一份从容，从 Telos 开始。** [下载安装包](https://github.com/lucifersteps/telos-harness/releases/tag/v0.4.16)，或按下方的[「让 AI 帮你安装」](#让-ai-帮你安装)开始配置。
 
 [查看六宫格漫画原图](docs/assets/telos-story.png) · [查看宣传海报（含项目二维码）](docs/assets/telos-poster.png)
 
@@ -51,22 +51,24 @@ DeepSeek Harness（下文简称 DSH）支持桌面版和 CLI，两种方式使�
 | 项目 | 要求 |
 | --- | --- |
 | 电脑 | macOS 14 或更新版本，Apple Silicon（M 系列芯片）；目前不支持 Intel Mac、Windows、Linux |
-| 宿主 | 已验证 DSH **0.2.1-rc.2** 的官方桌面版和 Node/CLI |
+| 宿主 | 已验证 DSH **0.2.1-rc.2 / rc.3** 的官方桌面版和 Node/CLI |
 | 模型 | DSH 中可用的模型连接；可复用已有配置，或登录账号、填写自己的 API Key |
 | 微信 | 用户本人扫码登录 |
 | Apple 功能 | 首次配置默认开启日历和提醒事项，由用户在 macOS 弹窗中授权 |
 
 安装包自带 Telos 所需的 Python 运行环境和 Apple 组件，无需安装 Python、Homebrew 或 Xcode。选用 Node/CLI 时，仍需要 DSH 对应的 Node.js 运行环境。
 
-**当前版本：0.4.15。** 从 [0.4.15 Release](https://github.com/lucifersteps/telos-harness/releases/tag/v0.4.15) 下载安装包与 SHA256 校验文件。不要把源码 ZIP 当作插件安装包。
+**当前版本：0.4.16。** 从 [0.4.16 Release](https://github.com/lucifersteps/telos-harness/releases/tag/v0.4.16) 下载安装包与 SHA256 校验文件。不要把源码 ZIP 当作插件安装包。
 
-**0.4.15 更新：** Telos 复用 DSH 已启用的通用工具，包括文件读写、编辑、搜索、终端和后台作业，沿用宿主权限与沙箱。微信列表标题、项目和子项目保留在同一个消息气泡中，代码块保留换行；操作预览与保存卡片仍完整发送。需要桌面交互或跨会话控制的工具暂不向微信开放。
+**0.4.16 更新：** 宿主兼容范围改为 `>=0.2.1-rc.2 <0.3.0-0`，支持从 rc.2 起的 0.2.x 候选版及正式版，已验证 rc.2 / rc.3。 修复 Apple 提醒事项刚读取后仍误报“对象已被修改”的问题，并恢复新版 macOS 的分区读取。保存卡片和待确认预览分别发送，避免确认与撤销口令冲突；格式追问保留草稿，重新校验并展示后再确认。沿用既有草稿和消息记录，没有新增状态机。升级自 0.4.15 时，Apple 组件更新可能需要重新授权日历与提醒事项。
 
-**0.4.14 修复仍保留：** 修复“修改安排＋查询日程”等同一条消息包含多个需求时，保存卡片覆盖其他回答的问题。完整卡片与简短查询答案分别发送，仍支持回复【1】撤销。保留默认直接写入及现有 Apple 扩展能力；Apple 扩展已在 macOS 26.2 验证，其他 macOS 版本尚未实机验证。
+**0.4.15 引入：** Telos 复用 DSH 已启用的通用工具，包括文件读写、编辑、搜索、终端和后台作业，沿用宿主权限与沙箱。微信列表标题、项目和子项目保留在同一个消息气泡中，代码块保留换行；操作预览与保存卡片仍完整发送。需要桌面交互或跨会话控制的工具暂不向微信开放。
+
+**0.4.14 修复仍保留：** 修复“修改安排＋查询日程”等同一条消息包含多个需求时，保存卡片覆盖其他回答的问题。完整卡片与简短查询答案分别发送，仍支持回复【1】撤销。保留默认直接写入及现有 Apple 扩展能力；Apple 扩展已在 macOS 26.2 验证，本次事项版本与分区修复另在 macOS 27.0.1 实机验证；其他系统版本仍需验证。
 
 当前安装包使用 ad-hoc 签名，尚未完成 Developer ID 公证及另一台实体 Mac 的首次安装验证；如遇系统拦截，见 [排障指南](docs/troubleshooting.md#macos-blocked)。
 
-**插件市场安装来源：** 使用 [0.4.15 预构建安装包](https://github.com/lucifersteps/telos-harness/releases/download/v0.4.15/telos-harness-0.4.15-macos-arm64.tgz)，并核对同一 Release 的 SHA256 文件。仓库根目录的 `package.json` 声明正式插件元数据；源码不包含已编译的 Python 和 Apple 组件，不能直接用 `github:lucifersteps/telos-harness` 代替安装包。市场安装完成后，仍需完成模型配置、微信扫码和 Apple 授权。
+**插件市场安装来源：** 使用 [0.4.16 预构建安装包](https://github.com/lucifersteps/telos-harness/releases/download/v0.4.16/telos-harness-0.4.16-macos-arm64.tgz)，并核对同一 Release 的 SHA256 文件。仓库根目录的 `package.json` 声明正式插件元数据；源码不包含已编译的 Python 和 Apple 组件，不能直接用 `github:lucifersteps/telos-harness` 代替安装包。市场安装完成后，仍需完成模型配置、微信扫码和 Apple 授权。
 
 ## 让 AI 帮你安装
 

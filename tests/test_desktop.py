@@ -4,6 +4,7 @@ import yaml
 import json
 import os
 from pathlib import Path
+import plistlib
 import re
 import subprocess
 import sys
@@ -109,6 +110,8 @@ async def test_desktop_first_setup_auth_login_repair_restart_and_confirm(tmp_pat
         credentials.write_text(saved);credentials.chmod(0o600)
         d.env.pop('DEEPSEEK_API_KEY');d.env.pop('BAIDU_MAP_AUTH_TOKEN')
         await d.start();saved=credentials.read_text();s=d.get();assert not s['configuration'] and not s['running'] and s['model']['model']=='deepseek-flash'
+        with (DESKTOP/'Contents/Info.plist').open('rb') as info:
+            assert s['dshVersion']==plistlib.load(info)['CFBundleShortVersionString']
         with pytest.raises(urllib.error.HTTPError) as error:urllib.request.urlopen(d.url+'/api/telos/status')
         assert error.value.code==401
         assert [p['id'] for p in s['personas']]==['default','liman','custom']
