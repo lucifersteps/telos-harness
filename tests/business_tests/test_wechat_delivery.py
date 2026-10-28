@@ -212,6 +212,60 @@ def test_wechat_list_is_one_bubble_with_its_heading():
     assert sent == ['这次读到了。', listing, '还有参考资料。']
 
 
+def test_wechat_adapter_forwards_multiple_independent_cards():
+    from telos.adapters.wechat.adapter import WeChatAdapter
+    from telos.adapters.base import SendResult
+    first = '**已保存**\n```text\n标题：会议\n```\n回复“撤销”可撤销'
+    second = '**操作预览**\n```text\n标题：提醒\n```\n回复【1】确认'
+    listing = '相关笔记：\n- 第一篇\n- 第二篇'
+    sent = []
+    async def send(ref, text):
+        sent.append(text)
+        return SendResult(ok=True)
+    async def run():
+        adapter = WeChatAdapter(config=WeChatConfig(), send_text_fn=send)
+        return await adapter.send_text(ConversationRef(platform='wechat', chat_id='user'),
+            first+'\n\n'+listing+'\n\n'+second, protected_text=first, protected_texts=[second])
+    result = asyncio.run(run())
+    assert result.ok and result.message_count == 3
+    assert sent == [first, listing, second]
+
+
+def test_multiple_card_delivery_still_stops_at_first_failure():
+    from telos.adapters.wechat.outbound import WeChatOutbound
+    from telos.adapters.base import SendResult
+    first = '已保存\n任务一\n可撤销'
+    second = '待确认\n任务二\n回复1'
+    sent = []
+    async def send(ref, text):
+        sent.append(text)
+        return SendResult(ok=text != second, error='rejected' if text == second else '')
+    async def run():
+        return await WeChatOutbound(config=WeChatConfig(), send_text_fn=send).send_text(
+            ConversationRef(platform='wechat', chat_id='user'), first+'\n'+second+'\n其他说明',
+            protected_texts=[first, second])
+    result = asyncio.run(run())
+    assert not result.ok and result.message_count == 1
+    assert sent == [first, second]
+
+
+def test_multiple_protected_cards_keep_existing_length_chunking():
+    from telos.adapters.wechat.outbound import WeChatOutbound
+    from telos.adapters.base import SendResult
+    first = 'A'*13
+    second = 'B'*7
+    sent = []
+    async def send(ref, text):
+        sent.append(text)
+        return SendResult(ok=True)
+    async def run():
+        return await WeChatOutbound(config=WeChatConfig(max_text_chars=10), send_text_fn=send).send_text(
+            ConversationRef(platform='wechat', chat_id='user'), first+'\n'+second, protected_texts=[second, first])
+    result = asyncio.run(run())
+    assert result.ok and result.message_count == 3
+    assert sent == ['A'*10, 'A'*3, second]
+
+
 def test_partial_preview_delivery_does_not_send_followup():
     from telos.adapters.wechat.outbound import WeChatOutbound
     from telos.adapters.base import SendResult
