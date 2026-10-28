@@ -18,6 +18,7 @@ from personas import system_prompt
 from settings import read_config
 from telos.agent.tools.types import ToolInputError
 from scheduled_delivery import ScheduledDelivery
+from image_delivery import share_image
 
 ROOT=Path(__file__).resolve().parent
 
@@ -63,6 +64,7 @@ class Channel(ScheduledDelivery):
                 try:self.known_ref(session);sessions.append(session)
                 except ValueError:pass
             return {'sessions':sessions}
+        if path=='/send-image':return await share_image(self,data)
         if path=='/scheduled-output':return await self.stage_scheduled(data)
         if path=='/memory-profile':
             ref=self.known_ref(data['session'])

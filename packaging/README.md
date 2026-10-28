@@ -1,6 +1,6 @@
 # Telos Harness 插件
 
-0.4.16 适用于 macOS 14+ Apple Silicon、官方 Node/CLI 或官网桌面版 DeepSeek Harness 0.2.1-rc.2 / rc.3。安装包包含 Python 运行环境和编译后的 Apple helper，不需要用户安装 Python、Homebrew 或 Xcode。
+0.4.17 适用于 macOS 14+ Apple Silicon、官方 Node/CLI 或官网桌面版 DeepSeek Harness 0.2.1-rc.2 / rc.3。安装包包含 Python 运行环境和编译后的 Apple helper，不需要用户安装 Python、Homebrew 或 Xcode。
 
 本版修复提醒事项版本误冲突、新版 macOS 分区读取，以及微信保存卡和预览粘连、反馈后无法确认的问题；复用已有草稿、确认及消息记录，没有新增状态机。从 0.4.15 升级后 Apple 组件可能要求重新授权，按系统提示由用户允许日历和提醒事项访问。
 
@@ -24,7 +24,7 @@ Telos 只提供微信收发、Apple/百度地图工具、随包 Skill 内容、�
 
 ## 桌面版
 
-1. 在“插件 → 添加插件”安装 `telos-harness-0.4.16-macos-arm64.tgz` 并启用。
+1. 在“插件 → 添加插件”安装 `telos-harness-0.4.17-macos-arm64.tgz` 并启用。
 2. 在 Telos 页选择模型：跟随 DSH 默认模型、使用 DeepSeek 账号、选择已有 API 模型，或展开“添加其他 API 模型”。账号登录直接打开 DSH 原生入口；API 模型支持 OpenAI Chat Completions、Responses 与 Anthropic Messages 协议。
 3. 在页面输入模型 API Key 或百度 Token，点击“保存到 DSH”。凭据直接调用 DSH credentials 服务，不经过 Telos 后端、不进入 Telos 配置或聊天，也不回显已存密钥。添加的 API Provider 通过 DSH settings 持久化；微信独立模型选择不会改变宿主默认模型。无模型列表时保存 Key 后刷新目录，也可手动填写准确的模型 ID。
 4. 选择微信人设，保留 Apple 开启，百度地图按需开启，点击“保存并应用”。运行中应用配置会短暂重启 Telos，保留历史、待确认操作和防重复写入记录。
@@ -73,7 +73,7 @@ BAIDU_MAP_AUTH_TOKEN=填写自己的地图令牌
 安装包必须先下载并校验，下面 `/path/to/` 替换为实际绝对路径。安装并运行：
 
 ```sh
-dsh plugin --profile telos add telos-harness@file:/path/to/telos-harness-0.4.16-macos-arm64.tgz --offline
+dsh plugin --profile telos add telos-harness@file:/path/to/telos-harness-0.4.17-macos-arm64.tgz --offline
 dsh --profile telos --telos-setup
 dsh --profile telos --telos-login
 dsh --profile telos --telos-authorize
@@ -179,6 +179,16 @@ Agent 通过 `user_memory` 的 read/write 维护小型 Markdown 文件；write �
 原件以内容哈希命名，保存在 `$TELOS_HOME/users/<用户哈希>/documents/<会话哈希>/`，不另建文档索引或会话状态库；临时下载目录处理后删除。备份时包含原件目录；清理后无法继续读取这些文件，已进入 DSH 历史的内容仍遵循宿主的历史保留规则。
 
 本次增加了微信 Agent 的原生 `bash`、`read`、`read_image` 能力。执行遵循 DSH 的沙箱与授权，不启用后台任务，也不自动扩大权限；原生文件沙箱主要限制写入，并不保证只能读取附件目录。提示词限定文档处理用途，但这不等于操作系统级的附件隔离。Apple 工具按当前写入模式执行；文件内容本身不构成用户的写入要求或确认。文件结果回传微信尚未接入。
+
+## 微信图片分享（0.4.17）
+
+微信会话可通过 `send_wechat_image` 发送公网 PNG/JPEG/WebP 图片（输入及转换结果均最多 10 MiB）。WebP 使用 macOS 系统工具转换为 PNG，不需额外安装图片库。小红书分享先发送封面，再将标题、简短摘要和完整原文链接合并成一条文字消息；图片本身不是可点击链接卡片。
+
+收件人固定为当前微信会话，工具没有指定其他收件人的参数。保留笔记链接中的访问参数，无法获取真实封面或链接时不编造。发送回执按会话和工具调用 ID 持久化；同一调用重放不重复发送。接口接受仅表示微信服务端接收，客户端是否已展示需用户确认。超时或部分成功不自动重发图片；图片下载或上传失败时可退回标题、摘要与链接。普通文件附件和本地图片路径暂未加入此工具。
+
+小红书笔记检索需在 DSH 中另行配置相关 MCP；Telos 安装包不包含小红书服务或登录信息。
+
+微信文字消息不支持把 URL 隐藏在标题内。若来源提供真实短链接则优先使用；不伪造短链、不删掉原文所需的访问参数。接口返回 `prepare failed` 时提示需要新的微信消息刷新回复窗口，不将明确拒收当成成功。
 
 ## 发布元数据
 

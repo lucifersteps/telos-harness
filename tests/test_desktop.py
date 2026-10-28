@@ -143,7 +143,7 @@ async def test_desktop_first_setup_auth_login_repair_restart_and_confirm(tmp_pat
             reply=db.execute('SELECT reply FROM messages ORDER BY rowid DESC LIMIT 1').fetchone()[0]
             assert reply==pending['text']
         assert list((d.home/'sessions').glob('*/*/session.v*.jsonl.zstd'))
-        assert {x['name'] for x in d.model.requests[0]['tools']}=={'bash','read','read_image','write','edit','glob','grep','job_output','job_list','job_kill','load_workspace_dependencies','personalPlan','ask_user','baidu_maps','todo_write','skill','user_memory','web_search','web_fetch','session_event_search','session_event_read','schedule_create','schedule_list','schedule_update','schedule_delete'}
+        assert {x['name'] for x in d.model.requests[0]['tools']}=={'bash','read','read_image','write','edit','glob','grep','job_output','job_list','job_kill','load_workspace_dependencies','personalPlan','ask_user','baidu_maps','todo_write','skill','user_memory','web_search','web_fetch','session_event_search','session_event_read','schedule_create','schedule_list','schedule_update','schedule_delete','send_wechat_image'}
         d.stop();await d.start();await d.wait(lambda:d.get()['running'])
         d.services.push('confirm','1');await d.wait(lambda:len(d.services.apple.writes)==1 and len(d.services.sent)>1)
         assert '你叫黎曼' in json.dumps(d.model.requests[-1],ensure_ascii=False)
@@ -269,7 +269,7 @@ async def test_native_models_tool_switches_apply_and_restart(tmp_path):
         d.services.push('disabled-tools','今天你好，请继续聊天。')
         await d.wait(lambda:len(d.services.sent)>0)
         names={t['function']['name'] if 'function' in t else t['name'] for t in d.model.requests[-1]['tools']}
-        assert names=={'bash','read','read_image','write','edit','glob','grep','job_output','job_list','job_kill','load_workspace_dependencies','ask_user','skill','todo_write','user_memory','web_search','web_fetch','session_event_search','session_event_read','schedule_create','schedule_list','schedule_update','schedule_delete'}
+        assert names=={'bash','read','read_image','write','edit','glob','grep','job_output','job_list','job_kill','load_workspace_dependencies','ask_user','skill','todo_write','user_memory','web_search','web_fetch','session_event_search','session_event_read','schedule_create','schedule_list','schedule_update','schedule_delete','send_wechat_image'}
         assert all('baidu-ai-map' not in block for block in re.findall(r'<available_skills>(.*?)</available_skills>',json.dumps(d.model.requests[-1],ensure_ascii=False),re.S))
         assert d.model.requests[-1]['model']=='test-model' and d.get()['defaultModel']==original_default
         before=(root/'config.json').read_bytes()
