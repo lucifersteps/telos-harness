@@ -73,11 +73,11 @@ def create_wechat_send_text_fn(
 
     async def send(ref: ConversationRef, text: str) -> SendResult:
         if not config.token:
-            return SendResult(ok=False, error="WECHAT_TOKEN is not configured")
+            return SendResult(ok=False, error="WECHAT_TOKEN is not configured", retryable=True)
         context_token = context_token_provider(ref) if context_token_provider else ""
         retried_without_context = False
+        client_id = (delivery_log_context.get() or {}).get('client_id') or make_client_id()
         while True:
-            client_id = make_client_id()
             payload = _send_message_payload(
                 to=ref.chat_id,
                 text=text,
@@ -145,6 +145,7 @@ def create_wechat_send_text_fn(
             return SendResult(
                 ok=False,
                 error=f"WeChat sendmessage error: ret={ret} errcode={errcode} errmsg={errmsg}",
+                retryable=True,
             )
 
     return send

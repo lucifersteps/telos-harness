@@ -50,6 +50,8 @@ class SendResult:
     message_id: str = ""
     error: str = ""
     message_count: int = 0
+    # True only when the transport explicitly confirms that nothing was sent.
+    retryable: bool = False
 
 
 @dataclass(frozen=True)

@@ -43,6 +43,23 @@ def _split_chat_bubbles(content: str) -> list[str]:
             index += 1
             continue
         start = index
+        # A note's title/summary and its URL form one share, not three sends.
+        # Stop at paragraph, list, heading and fence boundaries to keep ordinary
+        # chat bubbles and operation cards independent.
+        link_end = index
+        while link_end < len(lines) and lines[link_end].strip():
+            candidate = lines[link_end].strip()
+            if (_BUBBLE_SEPARATOR_RE.fullmatch(candidate) or _FENCE_RE.match(candidate)
+                    or _LIST_ITEM_RE.match(lines[link_end])
+                    or (link_end > index and _is_list_heading(candidate))):
+                break
+            if re.fullmatch(r'https?://\S+|\[[^\]]+\]\(https?://\S+\)', candidate):
+                index = link_end + 1
+                bubbles.append('\n'.join(lines[start:index]).strip())
+                break
+            link_end += 1
+        if index != start:
+            continue
         # Keep a list's heading with its items, including the usual blank line.
         if _is_list_heading(line):
             following = index + 1
@@ -184,6 +201,7 @@ async def send_text_in_bubbles(
                 message_id=result.message_id,
                 error=result.error,
                 message_count=sent_count,
+                retryable=result.retryable,
             )
         sent_count += 1
     return SendResult(ok=True, message_id=last.message_id, message_count=sent_count)

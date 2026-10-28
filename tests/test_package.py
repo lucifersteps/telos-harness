@@ -20,7 +20,7 @@ from support import Apple,Model,call,draft
 from runtime import ROOT,launch_args
 from settings import read_config,write_config
 
-ARCHIVE=Path(os.environ['TELOS_TEST_ARCHIVE']) if os.environ.get('TELOS_TEST_ARCHIVE') else ROOT/'dist/telos-harness-0.4.17-macos-arm64.tgz'
+ARCHIVE=Path(os.environ['TELOS_TEST_ARCHIVE']) if os.environ.get('TELOS_TEST_ARCHIVE') else ROOT/'dist/telos-harness-0.4.18-macos-arm64.tgz'
 pytestmark=pytest.mark.skipif(not ARCHIVE.exists(),reason='先构建插件归档')
 
 def run_async(fn):
@@ -32,6 +32,7 @@ class Services:
     def __init__(self):
         self.assets={};self.downloads=[];self.apple=Apple();self.messages=[];self.sent=[];self.polls=0;self.logins=0;self.authorizations=0
         owner=self
+        self.send_attempts=[];self.send_rejections={}
         class Handler(BaseHTTPRequestHandler):
             def log_message(self,*args):pass
             def result(self,value):
@@ -61,6 +62,11 @@ class Services:
                     cursor=int(data.get('get_updates_buf') or 0);messages=owner.messages[cursor:]
                     self.result({'ret':0,'msgs':messages,'get_updates_buf':str(cursor+len(messages))})
                 elif self.path.endswith('sendmessage'):
+                    owner.send_attempts.append(data)
+                    text=data['msg']['item_list'][0].get('text_item',{}).get('text','')
+                    if owner.send_rejections.get(text,0):
+                        owner.send_rejections[text]-=1
+                        self.result({'ret':-2,'errmsg':'prepare failed'});return
                     owner.sent.append(data);self.result({'ret':0,'message_id':str(len(owner.sent))})
                 else:self.result({'ret':0})
         self.server=ThreadingHTTPServer(('127.0.0.1',0),Handler)
