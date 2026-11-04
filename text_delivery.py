@@ -26,7 +26,7 @@ def init_text_delivery(business):
                        (key, hashlib.sha256(reply.encode()).hexdigest(), '[]', 0, 'legacy_unknown'))
 
 
-async def send_reply_parts(business, session, key, reply, adapter, ref, protected):
+async def send_reply_parts(business, session, key, reply, adapter, ref, protected, *, before_part=None):
     async with business.text_delivery_locks.setdefault(key, asyncio.Lock()):
         digest = hashlib.sha256(reply.encode()).hexdigest()
         with business.db() as db:
@@ -43,6 +43,8 @@ async def send_reply_parts(business, session, key, reply, adapter, ref, protecte
             return False
         parts = json.loads(encoded)
         while index < len(parts):
+            if before_part is not None and not before_part():
+                return False
             with business.db() as db:
                 db.execute("UPDATE text_outbox SET state='sending' WHERE key=?", (key,))
             client_id = 'telos-text-' + hashlib.sha256(f'{session}\0{key}\0{index}\0{digest}'.encode()).hexdigest()[:32]

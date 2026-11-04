@@ -4,6 +4,7 @@ from dataclasses import asdict
 import hashlib
 import json
 import logging
+from text_delivery import send_reply_parts
 
 from telos.adapters.base import ConversationRef
 from telos.adapters.delivery import split_reply_bubbles,split_text_by_length,delivery_log_context
@@ -18,6 +19,9 @@ class ScheduledDelivery:
                     session TEXT, seq INTEGER, key TEXT UNIQUE, parts TEXT, next_part INTEGER DEFAULT 0, approval_id TEXT,
                     PRIMARY KEY(session,seq));
             ''')
+            if 'proactive_id' not in {r[1] for r in db.execute('PRAGMA table_info(schedule_outbox)')}:
+                db.execute('ALTER TABLE schedule_outbox ADD COLUMN proactive_id TEXT')
+            db.execute('CREATE UNIQUE INDEX IF NOT EXISTS scheduled_proactive ON schedule_outbox(proactive_id) WHERE proactive_id IS NOT NULL')
             rows=db.execute('SELECT session,value FROM channel_refs').fetchall()
         self.refs.update({session:ConversationRef(**json.loads(value)) for session,value in rows})
         self.schedule_sender=None
@@ -38,6 +42,7 @@ class ScheduledDelivery:
 
     async def stage_scheduled(self,data):
         session=data['session'];self.known_ref(session)
+        if self.finish_proactive(data):return {}
         seq=data['seq'];text=data['text']
         if type(seq) is not int or seq<0 or not isinstance(text,str):raise ValueError('Invalid scheduled output')
         async with self.delivery_locks.setdefault(session,asyncio.Lock()):
@@ -59,14 +64,33 @@ class ScheduledDelivery:
 
     async def drain_scheduled(self):
         with self.business.db() as db:
-            rows=db.execute('SELECT o.session,o.seq,o.key FROM schedule_outbox o JOIN messages m ON m.id=o.key WHERE m.delivered=0 ORDER BY m.rowid').fetchall()
+            rows=db.execute('SELECT o.session,o.seq,o.key,o.proactive_id FROM schedule_outbox o JOIN messages m ON m.id=o.key WHERE m.delivered=0 ORDER BY m.rowid').fetchall()
         blocked=set()
-        for session,seq,key in rows:
+        for session,seq,key,proactive_id in rows:
             if session in blocked:continue
             try:
                 try:ref=self.known_ref(session)
                 except ValueError:continue
                 async with self.delivery_locks.setdefault(session,asyncio.Lock()):
+                    if proactive_id:
+                        event=self.proactive.event(proactive_id,session)
+                        if not self.proactive.eligible(event):
+                            with self.business.db() as db:db.execute('UPDATE messages SET delivered=1 WHERE id=?',(key,))
+                            continue
+                        def before_part():
+                            self.known_ref(session)
+                            return self.proactive.eligible(self.proactive.event(proactive_id,session))
+                        ok=await send_reply_parts(self.business,session,key,event['message'],self.adapter,ref,[event['message']],before_part=before_part)
+                        if ok:
+                            with self.business.db() as db:
+                                db.execute('UPDATE messages SET delivered=1 WHERE id=?',(key,))
+                                db.execute("UPDATE proactive_events SET state='sent',detail='' WHERE id=?",(proactive_id,))
+                        else:
+                            with self.business.db() as db:receipt=db.execute('SELECT state FROM text_outbox WHERE key=?',(key,)).fetchone()
+                            if receipt and receipt[0] in ('unknown','sending','legacy_unknown'):
+                                self.proactive.mark(proactive_id,'unknown','投递结果未知，未自动重发')
+                            else:blocked.add(session)
+                        continue
                     with self.business.db() as db:
                         parts,index,approval_id=db.execute('SELECT parts,next_part,approval_id FROM schedule_outbox WHERE session=? AND seq=?',(session,seq)).fetchone()
                     parts=json.loads(parts)

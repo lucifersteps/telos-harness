@@ -17,13 +17,15 @@ import {mountUserMemory} from './memory.mjs';
 import {mountDocumentTools} from './documents.mjs';
 import {mountHostTools} from './host-tools.mjs';
 import {mountImageTools} from './images.mjs';
+import {createProactive} from './proactive.mjs';
 export const name='telos-wechat';
 export const inject=['agents','sessions','sessionQuery','sessionPersistence','storageDomain','systemPrompt','attachments','agentDefaultModel','telosBusiness','workingDirectory','tools'];
 export async function apply(ctx) {
   const service=ctx.telosBusiness;
   const {prompt,scheduleNamespace}=await post(service,'/boot',{});
   const delivery=scheduleDelivery(ctx,service);
-  const scheduler=createScheduler(ctx,service,scheduleNamespace,open);
+  const proactive=createProactive(ctx,service,()=>scheduler.scope.get('schedule'));
+  const scheduler=createScheduler(ctx,service,scheduleNamespace,open,proactive);
   const managed=new Set(),turnEvents=new Map(),waiting=new Map();
   ctx.on('session/event',(session,event)=>{
     if(!managed.has(session))return;
@@ -45,6 +47,7 @@ export async function apply(ctx) {
   const history=ctx.isolate('sessionQuery');
   await history.plugin(SqliteSessionQuery,{path:':memory:',openAt:'first-search',readWindowMax:10});
   async function setup(scope,agent,memoryDirectory) {
+    const proactiveTurn=proactive.mount(scope,agent);
     let businessContext;
     const presets=await mountHostTools(scope,agent);
     // Reuse the preset's isolated compaction hooks as well as CLI's provider.
@@ -63,11 +66,12 @@ export async function apply(ctx) {
     mountHistoryTools(scope,agent,history.get('sessionQuery'));
     {
       await scope.plugin(SkillFilesystem,{customSkillDirs:[fileURLToPath(new URL('./document-skills/',import.meta.url)),...(service.tools?.maps===false?[]:[service.skillsDir])],includeDefaultRoots:true,watch:false});
-      await mountScheduleTools(scope,scheduler.scope);
+      await mountScheduleTools(scope,scheduler.scope,proactive);
       await scope.plugin(Apple);
       if(service.tools?.maps!==false)await scope.plugin(Maps);
     }
     agent.ctx.on('agent/pre-step',async ({step,messages,signal},next)=>{
+      await proactiveTurn.prepare(messages);
       if(step>service.maxSteps)throw new Error('本轮已达到步骤限额，保留会话等待继续。');
       if(messages.length)await post(service,'/prepare',{session:agent.session.id,
         messages:messages.map(m=>({id:m.id,hasMedia:m.content.some(b=>b.type!=='text'),
@@ -106,6 +110,7 @@ export async function apply(ctx) {
   });
   await delivery.replay();
   await scheduler.start();
+  await proactive.start();
   const server=createServer(async(req,res)=>{
     if(req.headers.authorization!=='Bearer '+service.token){res.writeHead(403);res.end();return;}
     try {

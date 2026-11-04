@@ -17,7 +17,9 @@ def runtime_options(config):
             or not all(isinstance(model.get(k),str) and model[k].strip() for k in ('provider','model'))
             or any(not isinstance(v,str) or not v.strip() or len(v)>256 for v in model.values())):
             raise ValueError('请选择有效的 DSH 模型。')
-    return {'direct_write':direct,'tools':{'apple':True,'maps':True,**tools},'model_selection':model}
+    from proactive import validate
+    proactive=validate(config.get('proactive'))
+    return {'proactive':proactive,'direct_write':direct,'tools':{'apple':True,'maps':True,**tools},'model_selection':model}
 
 def read_config(root):
     path=Path(root)/'config.json'

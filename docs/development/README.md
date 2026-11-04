@@ -69,3 +69,5 @@ Apple 扩展能力的验证入口：`tests/business_tests/test_extended_apple.py
 图片发送由 `plugin/images.mjs` 注册、`image_delivery.py` 绑定当前会话并保存分段回执，`checkout/src/telos/adapters/wechat/image_outbound.py` 负责限量下载、WebP 转 PNG、AES-128-ECB/PKCS7 上传及 iLink 发送。`tests/test_image_delivery.py` 覆盖真实 DSH 宿主工具调用、加密载荷、收件人隔离、重放去重、部分失败和网络地址限制。
 
 普通文字投递由 `text_delivery.py` 持久保存分段计划、已确认位置与发送状态。每段发送前记录 sending；仅明确拒收允许从失败段重试，超时、取消及崩溃后结果未知时暂停自动重放。首次升级把旧版无分段回执的未完成回复标记为 legacy_unknown，原文保留。`tests/test_text_delivery.py` 与 `tests/test_text_delivery_hosts.py` 覆盖部分发送恢复、固定消息 ID、未知结果、并发去重和真实编译包重启；标题、摘要及完整 URL 在段落内合并发送。
+
+主动消息开发方案与配置说明见 [proactive.md](proactive.md)：30 分钟 heartbeat、可选固定提醒、Agent 登记后续检查，以及显式通知与静默输出的边界。

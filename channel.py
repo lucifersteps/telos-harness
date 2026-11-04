@@ -19,17 +19,19 @@ from settings import read_config
 from telos.agent.tools.types import ToolInputError
 from scheduled_delivery import ScheduledDelivery
 from image_delivery import share_image
+from proactive_channel import ProactiveChannel
 
 ROOT=Path(__file__).resolve().parent
 
 
-class Channel(ScheduledDelivery):
+class Channel(ProactiveChannel,ScheduledDelivery):
     def __init__(self,root,apple,adapter,*,harness_home=None,token=None,timeout=180,event_sink=None):
         self.root=Path(root);self.root.mkdir(parents=True,exist_ok=True)
         self.prompt=system_prompt(read_config(self.root))
         self.business=Business(self.root,apple,read_config(self.root));self.adapter=adapter
         self.delivery_locks={};self.loop=asyncio.get_running_loop();self.refs={};self.event_sink=event_sink
         self.init_scheduled_delivery()
+        self.init_proactive()
         self.ready=self.loop.create_future();self.timeout=timeout
         self.harness_home=Path(harness_home) if harness_home else self.root/'harness'
         self.token=token or secrets.token_hex(24);owner=self
@@ -52,6 +54,8 @@ class Channel(ScheduledDelivery):
         self.server.daemon_threads=True
         threading.Thread(target=self.server.serve_forever,daemon=True).start()
     async def route(self,path,data):
+        if path.startswith('/proactive/'):
+            return await self.proactive_route(path,data)
         if path=='/ready':
             if not self.ready.done():self.ready.set_result(data['url'])
             self.start_schedule_sender()

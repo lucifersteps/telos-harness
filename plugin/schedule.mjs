@@ -8,9 +8,10 @@ import {post} from './bridge.mjs';
 // existing non-human turn protection and durable WeChat outbox for both.
 export const isBackgroundMessage=message=>['schedule','tool-jobs'].includes(message.source?.kind);
 
-export function createScheduler(ctx,service,namespace,open) {
+export function createScheduler(ctx,service,namespace,open,proactive) {
   if(!/^telos_schedule_[a-f0-9]{16}$/.test(namespace))throw new Error('Invalid Telos schedule namespace');
-  const scope=ctx.isolate('schedule').isolate('sessionController').isolate('storageDomain');
+  const scope=ctx.isolate('schedule').isolate('sessionController').isolate('storageDomain').isolate('sessions');
+  const gate=proactive?.gate(ctx.sessions);
   const storage=ctx.get('storageDomain');
   const storageAdapter={open(spec){
     if(spec!==scheduleDomain)throw new Error('Unexpected schedule storage domain');
@@ -20,25 +21,30 @@ export function createScheduler(ctx,service,namespace,open) {
     try {
       // The business service validates persisted ownership and current account.
       await post(service,'/memory-profile',{session:id},AbortSignal.timeout(15000));
-      return {agent:(await open(id,true)).agent};
+      const agent=(await open(id,true)).agent;
+      return {agent:gate?gate.agent(agent):agent};
     } catch(error){return {error};}
   }};
   return {scope,start:async()=>{
     await scope.plugin({name:'telos-schedule-adapters',apply(child){
       child.provide('storageDomain',storageAdapter);child.provide('sessionController',resolver);
+      if(gate)child.provide('sessions',gate.sessions);
     }});
     await scope.plugin(ScheduleService);
     if(!scope.get('schedule'))throw new Error('DSH native schedule service did not activate');
   }};
 }
 
-export async function mountScheduleTools(scope,scheduler) {
+export async function mountScheduleTools(scope,scheduler,proactive) {
   // Keep the original native definitions and caller-session binding. Do not
   // inherit the desktop's unrelated schedule instance into this Agent.
   const local=scope.isolate('schedule');
   const native=scheduler.get('schedule');
   local.provide('schedule',Object.fromEntries(['create','list','update','delete','catalog'].map(name=>[name,async(...args)=>{
-    try{return await native[name](...args);}catch(error){console.error('Telos schedule '+name+': '+error.stack);throw error;}
+    try{
+      if(name==='update'||name==='delete')await proactive?.assertEditable(args[0]?.sessionId,args[0]?.id);
+      return await native[name](...args);
+    }catch(error){console.error('Telos schedule '+name+': '+error.stack);throw error;}
   }])));
   await local.plugin(ScheduleTools);
   scope.systemPrompt.section({name:'telos:schedule',order:0,interpolate:false,text:
@@ -79,7 +85,7 @@ export function scheduleDelivery(ctx,service) {
     const turns=conversationTurns(events).filter(t=>t.scheduled&&!t.users.length);
     for(const turn of turns){
       if(turn.seq<=(acknowledged.get(session)??-1))continue;
-      pending.set(session+'\0'+turn.seq,{session,seq:turn.seq,text:turn.text,inputs:turn.inputs});
+      pending.set(session+'\0'+turn.seq,{session,seq:turn.seq,text:turn.text,inputs:turn.inputs,finish:turn.finish});
     }
     return drain();
   };

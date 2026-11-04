@@ -175,14 +175,14 @@ async def command(args):
     config=read_config(root)
     lock=SingleInstanceLock(root/'instance.lock')
     deadline=time.monotonic()+(8 if args.command=='serve' else 0)
-    while args.command!='status' and not lock.acquire():
+    while args.command not in {'status','proactive'} and not lock.acquire():
         if time.monotonic()>=deadline:raise ValueError('该 Telos 数据目录已有运行实例；请先停止它，不会抢占或终止进程。')
         await asyncio.sleep(.1)
     try:
         if args.command=='configure':
             value=json.load(sys.stdin)
             from settings import runtime_options
-            if not isinstance(value,dict) or set(value)-{'max_steps','persona','persona_file','tools','model_selection','direct_write'}:raise ValueError('只接受 Telos 非敏感选项；凭据请交给 DSH。')
+            if not isinstance(value,dict) or set(value)-{'max_steps','persona','persona_file','tools','model_selection','direct_write','proactive'}:raise ValueError('只接受 Telos 非敏感选项；凭据请交给 DSH。')
             steps=value.get('max_steps',config.get('max_steps',24))
             if isinstance(steps,bool) or not isinstance(steps,int) or not 1<=steps<=100:raise ValueError('执行步骤应为 1 到 100 的整数。')
             candidate={**config,**value,'max_steps':steps}
@@ -191,6 +191,13 @@ async def command(args):
             config.update(candidate);config.update(selected)
             if selected['persona']!='custom':config.pop('persona_file',None)
             write_config(root,config);print(json.dumps({'configured':True}),flush=True)
+        elif args.command=='proactive':
+            from proactive import ProactiveStore
+            value=json.load(sys.stdin)
+            if not isinstance(value,dict) or set(value)-{'action','event_id','until'}:raise ValueError('无效的主动消息操作。')
+            store=ProactiveStore(root)
+            current,_,_=store.sync()
+            print(json.dumps(store.control(current['session'],value.get('action'),value.get('event_id'),value.get('until')),ensure_ascii=False),flush=True)
         elif args.command=='setup':
             write_config(root,config)
             print(json.dumps({'configured':True}),flush=True)
@@ -214,11 +221,12 @@ async def command(args):
             result=await asyncio.to_thread(client.request,'authorize',{})
             print(json.dumps({'apple':result}))
         elif args.command=='status':
+            from proactive import ProactiveStore
             from settings import runtime_options
             try:apple=apple_client(config,helper_path(config)).request('status',{}) if runtime_options(config)['tools']['apple'] else {'status':'disabled'}
             except Exception as error:apple={'status':'unavailable','error':str(error)}
             print(json.dumps({'direct_write':runtime_options(config)['direct_write'],'configuration':(root/'config.json').exists(),'personas':OPTIONS,**selection(config),'wechat_enabled':config['wechat'].get('enabled',False),
-                'wechat_login':bool(WeChatStateStore(root/'wechat').load_default_account()),'apple':apple}))
+                'proactive':ProactiveStore(root).status(),'wechat_login':bool(WeChatStateStore(root/'wechat').load_default_account()),'apple':apple}))
         else:await serve(root,Path(args.harness_home),config)
     finally:lock.release()
 
@@ -227,7 +235,7 @@ def main():
     os.umask(0o077)
     if len(sys.argv)==4 and sys.argv[1]=='decode-silk':
         decode_silk(sys.argv[2],sys.argv[3]);return 0
-    parser=argparse.ArgumentParser();parser.add_argument('command',choices=['setup','configure','login','login-json','authorize','status','serve'])
+    parser=argparse.ArgumentParser();parser.add_argument('command',choices=['setup','configure','login','login-json','authorize','status','serve','proactive'])
     parser.add_argument('--home',required=True);parser.add_argument('--harness-home')
     args=parser.parse_args()
     try:asyncio.run(command(args))
