@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 from contextlib import contextmanager
 import json
+import re
 from pathlib import Path
 import sqlite3
 import time
@@ -25,7 +26,9 @@ from text_delivery import init_text_delivery, send_reply_parts
 
 SAVED_UNDO_INSTRUCTION='回复【1】撤销；需要修改时直接回复修改内容'
 SAVED_PENDING_INSTRUCTION='如需撤销这次保存，请先回复“取消”结束当前待处理内容，再回复“撤销”。'
-PREVIEW_CONTROLS={'1','确认','同意','2','取消','拒绝','/stop'}
+PREVIEW_REFRESH='重新预览'
+PREVIEW_CONTROLS={'1','确认','同意','2','取消','拒绝','/stop',PREVIEW_REFRESH}
+PREVIEW_RECOVERY='草稿仍保留，但旧预览已暂停确认。回复“重新预览”可重新校验并查看当前草稿；如需修改，请直接说明修改内容。本次未执行操作。'
 
 
 class Business:
@@ -116,7 +119,16 @@ class Business:
     async def context(self,session):
         # DSH appends changed runtime contexts. Keep this contribution small and
         # stable; current Apple objects are read through personalPlan query/detail.
-        return {'direct_write':self.direct_write,'pending':self.pending(session),
+        pending=self.pending(session)
+        if (pending and pending['kind']=='approval' and not pending.get('executing')
+                and pending.get('origin')!=self.active.get(session,{}).get('key')
+                and (not pending.get('delivered') or pending['expires_at']<=time.time())):
+            # Stale confirmation controls are not a presentation for this turn.
+            # Give the model an actionable recovery path next to the actual state.
+            pending.pop('text',None)
+            pending['status']='needs_revision'
+            pending['instruction']='旧预览不可确认。先结合用户最新补充调用 personalPlan(action=revise, request_mode=continue, draft_call_id=当前 id)；批量须提交完整 operations。即使内容未变，也必须重新校验再展示工具返回的新卡。不能提示用户直接回复1，不能复制历史卡片。用户仅查询无关内容时正常回答。'
+        return {'direct_write':self.direct_write,'pending':pending,
                 'receipt':self.active.get(session,{}).get('receipt'),
                 'time':self.active.get(session,{}).get('time')}
 
@@ -282,6 +294,25 @@ class Business:
             self.set_pending(session,None)
             return result
 
+    async def refresh_preview(self,session):
+        """Explicit user command: revalidate a retained draft, never execute it."""
+        pending=self.pending(session)
+        if not pending or pending['kind']!='approval' or pending.get('executing'):
+            return {'status':'deny','text':'当前没有可重新预览的草稿，请说明需要的操作。'}
+        args={'action':'revise','draft_call_id':pending['id'],'request_mode':'continue'}
+        if pending['preview']['action']=='batch':args['operations']=pending['preview']['operations']
+        try:
+            result=await self.execute(session,'refresh-'+self.active[session]['key'],'personalPlan',args)
+            if result.get('status')=='awaiting_approval':return result
+            current=self.pending(session)
+            if current and current.get('id')==pending['id']:
+                current['delivered']=False;self.set_pending(session,current)
+            return {**result,'text':result.get('text') or '草稿未能生成有效预览，未执行操作。请补充或核实安排后再预览。'}
+        except Exception as error:
+            pending['delivered']=False;self.set_pending(session,pending)
+            return {'status':'deny','reason':str(error),
+                'text':'草稿重新校验未通过，未执行操作。请说明需要修改的内容；也可回复“取消”后重新提出安排。'}
+
     async def confirm(self,session):
         """执行原样批准的草稿；沿用原身份和 Apple 幂等账本，不调用模型生成操作。"""
         if not self.enabled['apple']:return {'status':'disabled','text':'Apple 工具已关闭，本次未写入；请启用后再确认。'}
@@ -290,11 +321,12 @@ class Business:
             return {'status':'deny','text':'当前没有可确认的有效预览，请说明需要的操作。'}
         if pending.get('executing'):return await self.reconcile(session,pending)
         if pending['expires_at']<=time.time():
-            self.set_pending(session,None);return {'status':'deny','text':'预览已过期，请重新预览。'}
+            pending['delivered']=False;self.set_pending(session,pending)
+            return {'status':'deny','text':'预览已过期，草稿仍保留。请回复“重新预览”，核对新卡后再确认。本次未执行操作。'}
         if self.feedback_after(session,pending['origin'],self.active.get(session,{}).get('key')):
             pending['delivered']=False;self.set_pending(session,pending)
         if not pending.get('delivered'):
-            return {'status':'deny','text':'当前没有可确认的已展示预览；请先重新展示并核对草稿。本次未执行操作。'}
+            return {'status':'deny','text':PREVIEW_RECOVERY}
         args=pending['args']
         invocation=ToolInvocationContext(session_id=session,turn_id=pending['origin'],tool_call_id=pending['id'],tool_name='personalPlan')
         try:
@@ -385,7 +417,9 @@ class Business:
         elif pending and pending['kind']=='approval' and pending.get('text') and not pending.get('delivered'):
             # A quotation is not a newly checked preview. Only a successful
             # structured revision can restore its confirmation controls.
-            text=text.replace(pending['text'],'这份旧预览尚未重新校验，当前不能确认；需要重新生成预览。')
+            text=text.replace(pending['text'],PREVIEW_RECOVERY)
+            if re.search(r'(?:回[复一]|回一句|回个|发送|输入).{0,24}(?:1|确认|同意)',text):
+                text=PREVIEW_RECOVERY
         parts=[text.strip()] if text.strip() else []
         receipt=self.active.get(session,{}).get('receipt') or {}
         if receipt.get('text') and receipt['text'] not in '\n'.join(parts):parts.insert(0,receipt['text'])
