@@ -14,7 +14,7 @@
 
 ![Telos 六格漫画：从遗漏安排、反复尝试管理 App，到在微信里发送截图和语音，由 Telos 整理到 Apple 日历与提醒事项，事务虽多依然从容有序。](docs/assets/telos-story.png)
 
-**多一份从容，从 Telos 开始。** [下载安装包](https://github.com/lucifersteps/telos-harness/releases/tag/v0.4.18)，或按下方的[「让 AI 帮你安装」](#让-ai-帮你安装)开始配置。
+**多一份从容，从 Telos 开始。** [下载安装包](https://github.com/lucifersteps/telos-harness/releases/tag/v0.4.19)，或按下方的[「让 AI 帮你安装」](#让-ai-帮你安装)开始配置。
 
 [查看六宫格漫画原图](docs/assets/telos-story.png) · [查看宣传海报（含项目二维码）](docs/assets/telos-poster.png)
 
@@ -69,9 +69,9 @@ DeepSeek Harness（下文简称 DSH）支持桌面版和 CLI，两种方式使�
 
 安装包自带 Telos 所需的 Python 运行环境和 Apple 组件，无需安装 Python、Homebrew 或 Xcode。选用 Node/CLI 时，仍需要 DSH 对应的 Node.js 运行环境。
 
-**当前版本：0.4.18。** 从 [0.4.18 Release](https://github.com/lucifersteps/telos-harness/releases/tag/v0.4.18) 下载安装包与 SHA256 校验文件。不要把源码 ZIP 当作插件安装包。
+**当前版本：0.4.19。** 从 [0.4.19 Release](https://github.com/lucifersteps/telos-harness/releases/tag/v0.4.19) 下载安装包与 SHA256 校验文件。不要把源码 ZIP 当作插件安装包。
 
-**0.4.18 更新：** 修复文字回复发送中断后，重启反复发送开头的问题。逐段保存投递进度；明确拒收时从失败段恢复，结果未知时暂停重发。笔记的标题、摘要和完整链接保持在一条消息中。保留图片发送能力，复用原 Apple 组件。
+**0.4.19 更新：** 修复补充消息后旧预览不可确认、助手仍提示回复「1」的问题。旧卡暂停确认时保留草稿，回复“重新预览”即可重新校验并展示新卡，核对后再回复【1】确认；过期草稿也可恢复。复用现有草稿和确认流程，不新增状态机或数据库字段，保留文字投递恢复与图片分享能力。
 
 **0.4.15 引入：** Telos 复用 DSH 已启用的通用工具，包括文件读写、编辑、搜索、终端和后台作业，沿用宿主权限与沙箱。微信列表标题、项目和子项目保留在同一个消息气泡中，代码块保留换行；操作预览与保存卡片仍完整发送。需要桌面交互或跨会话控制的工具暂不向微信开放。
 
@@ -79,7 +79,7 @@ DeepSeek Harness（下文简称 DSH）支持桌面版和 CLI，两种方式使�
 
 当前安装包使用 ad-hoc 签名，尚未完成 Developer ID 公证及另一台实体 Mac 的首次安装验证；如遇系统拦截，见 [排障指南](docs/troubleshooting.md#macos-blocked)。
 
-**插件市场安装来源：** 使用 [0.4.18 预构建安装包](https://github.com/lucifersteps/telos-harness/releases/download/v0.4.18/telos-harness-0.4.18-macos-arm64.tgz)，并核对同一 Release 的 SHA256 文件。仓库根目录的 `package.json` 声明正式插件元数据；源码不包含已编译的 Python 和 Apple 组件，不能直接用 `github:lucifersteps/telos-harness` 代替安装包。市场安装完成后，仍需完成模型配置、微信扫码和 Apple 授权。
+**插件市场安装来源：** 使用 [0.4.19 预构建安装包](https://github.com/lucifersteps/telos-harness/releases/download/v0.4.19/telos-harness-0.4.19-macos-arm64.tgz)，并核对同一 Release 的 SHA256 文件。仓库根目录的 `package.json` 声明正式插件元数据；源码不包含已编译的 Python 和 Apple 组件，不能直接用 `github:lucifersteps/telos-harness` 代替安装包。市场安装完成后，仍需完成模型配置、微信扫码和 Apple 授权。
 
 ## 让 AI 帮你安装
 

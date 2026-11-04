@@ -13,7 +13,7 @@ import secrets
 import threading
 
 import aiohttp
-from business import Business
+from business import Business, PREVIEW_CONTROLS, PREVIEW_REFRESH
 from personas import system_prompt
 from settings import read_config
 from telos.agent.tools.types import ToolInputError
@@ -103,6 +103,8 @@ class Channel(ScheduledDelivery):
                 receipt=await self.business.undo(session,target) if target else {'status':'deny','text':'当前没有可确认的预览或可用【1】撤销的保存卡片；请说明需要修改的安排，或回复“撤销”撤回最近一次直接保存。'}
             elif undo:
                 receipt=await self.business.undo(session,undo.group(1) or '')
+            elif control==PREVIEW_REFRESH:
+                receipt=await self.business.refresh_preview(session)
             elif control in {'取消','拒绝','2','/stop'} and (not pending or pending['kind']=='approval' or control!='2'):
                 if pending and pending.get('id'):self.business.settle_drafts(session,pending['id'],{'status':'cancelled'})
                 self.business.set_pending(session,None)
@@ -156,7 +158,7 @@ class Channel(ScheduledDelivery):
                 receipts=[r[2] for r in rows if r[2] and not r[1]]
                 # A control-only turn with no further tool work reports its actual
                 # receipt, not an additional model promise to perform the same save.
-                control_only=receipts and all(r[3].strip() in {'1','确认','同意','2','取消','拒绝','/stop'} or re.fullmatch(r'撤销(?:\s+[0-9a-f]{12})?',r[3].strip()) for r in rows)
+                control_only=receipts and all(r[3].strip() in PREVIEW_CONTROLS or re.fullmatch(r'撤销(?:\s+[0-9a-f]{12})?',r[3].strip()) for r in rows)
                 if control_only and (self.business.active.get(session,{}).get('receipt',{}).get('control')
                                      or not any(e.get('type')=='tool/result' for e in events)):
                     reply='\n\n'.join(dict.fromkeys(receipts))

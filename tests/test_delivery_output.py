@@ -4,6 +4,34 @@ import pytest
 from support import Harness, call, draft
 
 
+def test_suspended_batch_refresh_is_delivered_before_confirmation(tmp_path):
+    async def run():
+        h = Harness(tmp_path, [
+            call('batch', {'action': 'batch', 'operations': [draft('会议一'), draft('会议二')]}),
+            '请核对预览。',
+            '上面那张预览还在等确认，你回一句「1」，我就执行。',
+            '请重新预览。',
+            '已经重新预览。',
+            '已完成。',
+        ])
+        try:
+            await h.submit('先预览这两项安排。')
+            await h.submit('就是这两项安排。')
+            assert '旧预览已暂停确认' in h.sent[-1]
+            await h.submit('1')
+            assert not h.native.writes
+            await h.submit('重新预览')
+            pending = h.runtime.business.pending(h.session)
+            assert pending['delivered'] and h.sent[-1] == pending['text']
+            assert not h.native.writes
+            await h.submit('1')
+            assert len(h.native.writes) == 2
+            assert h.runtime.business.pending(h.session) is None
+        finally:
+            await h.close()
+    asyncio.run(run())
+
+
 @pytest.mark.parametrize('question',[False,True])
 def test_pending_presentation_has_one_owner(tmp_path,question):
     async def run():

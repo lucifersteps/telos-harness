@@ -12,6 +12,7 @@ import time
 import pytest
 
 from channel import Channel
+from business import PREVIEW_RECOVERY
 from support import Apple, draft
 from telos.adapters.base import ConversationRef, SendResult
 from telos.adapters.wechat.config import WeChatConfig
@@ -218,7 +219,77 @@ def test_expired_suspended_preview_is_not_renewed_by_reprinting(tmp_path):
             assert_suspended(h, original)
             await message(h, 'confirm', '1')
             assert '过期' in h.b.active[SESSION]['receipt']['text']
-            assert h.b.pending(SESSION) is None and not h.native.writes
+            assert_suspended(h, original)
+            assert not h.native.writes
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize('expired', [False, True])
+def test_batch_feedback_refresh_command_then_confirm(tmp_path, expired):
+    async def run():
+        async with local_channel(tmp_path) as h:
+            await message(h, 'initial', '把下午的安排换成访谈，先预览。')
+            h.native.items.append({'id': 'old-event', 'kind': 'event', **draft('原会议')['fields']})
+            old = h.b.apple.detail('event', 'old-event')
+            result = await h.b.execute(SESSION, 'batch-draft', 'personalPlan', {
+                'action': 'batch', 'operations': [
+                    {'action': 'delete', 'kind': 'event', 'id': old['id'], 'expected_revision': old['revision']},
+                    draft('访谈')],
+            })
+            await present(h, 'initial', result['text'])
+            original = h.b.pending(SESSION)
+            await message(h, 'feedback', '就是换成访谈。')
+            context = await h.b.context(SESSION)
+            assert context['pending']['status'] == 'needs_revision'
+            assert 'text' not in context['pending']
+            assert 'revise' in context['pending']['instruction']
+            assert h.b.pending(SESSION)['text'] == original['text']
+            reply = await present(h, 'feedback', '上面那张预览还在等确认，你回一句「1」，我就执行。')
+            assert reply == PREVIEW_RECOVERY
+            if expired:
+                original = h.b.pending(SESSION)
+                original['expires_at'] = time.time() - 1
+                h.b.set_pending(SESSION, original)
+            await message(h, 'confirm-stale', '1')
+            assert h.b.active[SESSION]['receipt']['status'] == 'deny'
+            assert not h.native.writes
+            await present(h, 'confirm-stale', h.b.active[SESSION]['receipt']['text'])
+            await message(h, 'refresh', '重新预览')
+            receipt = h.b.active[SESSION]['receipt']
+            assert receipt['status'] == 'awaiting_approval' and receipt['control']
+            current = h.b.pending(SESSION)
+            assert current['origin'] == 'refresh' and current['id'] != original['id']
+            assert current['preview'] == original['preview']
+            assert current['expires_at'] > time.time() and not current['delivered']
+            assert not h.native.writes
+            await present(h, 'refresh', receipt['text'])
+            assert h.b.pending(SESSION)['delivered']
+            await message(h, 'confirm-new', '1')
+            assert len(h.native.writes) == 2 and h.b.pending(SESSION) is None
+            assert [w[0] for w in h.native.writes] == ['delete', 'create']
+    asyncio.run(run())
+
+
+def test_refresh_failure_preserves_draft_without_authorizing_it(tmp_path):
+    async def run():
+        async with local_channel(tmp_path) as h:
+            original = await initial_preview(h)
+            h.native.fail = True
+            await message(h, 'refresh', '重新预览')
+            assert h.b.active[SESSION]['receipt']['status'] == 'deny'
+            assert_suspended(h, original)
+            assert not h.native.writes
+    asyncio.run(run())
+
+
+def test_media_refresh_text_is_not_a_control_command(tmp_path):
+    async def run():
+        async with local_channel(tmp_path) as h:
+            original = await initial_preview(h)
+            assert h.b.accept(SESSION, 'media-refresh', '重新预览')
+            await h.channel.prepare(SESSION, [{'id': 'media-refresh', 'hasMedia': True}])
+            assert_suspended(h, original)
+            assert not h.native.writes
     asyncio.run(run())
 
 
