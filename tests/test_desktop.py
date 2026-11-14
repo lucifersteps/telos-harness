@@ -44,6 +44,9 @@ return Response.json({result,bundles:await ctx.pluginManager.listBundles()});}ca
         self.env={k:v for k,v in os.environ.items() if not k.startswith(('TELOS_','DEEPSEEK_','BAIDU_','DSH_','PYTHON'))}
         self.env.update(DSH_AGENTS_HOME=str(self.home/'agents'),DSH_HOME=str(self.home),ELECTRON_RUN_AS_NODE='1')
         self.res=DESKTOP/'Contents/Resources';self.runtime=self.res/'app.asar/dsh';self.exe=DESKTOP/'Contents/MacOS/DeepSeek Harness';self.proc=None
+        # Match the real shell's Host environment (required by 0.2.2 telemetry).
+        with (DESKTOP/'Contents/Info.plist').open('rb') as info:
+            self.env['DSH_CLIENT_VERSION']=plistlib.load(info)['CFBundleShortVersionString']
         self.services=Services();self.model=Model([call('bad',{'action':'batch','operations':[]}),call('draft',draft()),'请确认。','已保存。','无待确认操作。'])
         result=subprocess.run([str(self.res/'runtime/cli/bin/dsh'),'plugin','--profile','desktop','add','telos-harness@file:'+str(ARCHIVE),'--offline'],env=self.env,capture_output=True,text=True,timeout=60)
         assert result.returncode==0,result.stdout+result.stderr
@@ -143,7 +146,11 @@ async def test_desktop_first_setup_auth_login_repair_restart_and_confirm(tmp_pat
             reply=db.execute('SELECT reply FROM messages ORDER BY rowid DESC LIMIT 1').fetchone()[0]
             assert reply==pending['text']
         assert list((d.home/'sessions').glob('*/*/session.v*.jsonl.zstd'))
-        assert {x['name'] for x in d.model.requests[0]['tools']}=={'bash','read','read_image','write','edit','glob','grep','job_output','job_list','job_kill','load_workspace_dependencies','personalPlan','ask_user','baidu_maps','todo_write','skill','user_memory','web_search','web_fetch','session_event_search','session_event_read','schedule_create','schedule_list','schedule_update','schedule_delete','notify_user','schedule_next_check','proactive_control','send_wechat_image'}
+        names={x['name'] for x in d.model.requests[0]['tools']}
+        # Host tool additions are inherited; scheduling names changed in 0.2.2.
+        assert {'bash','read','read_image','write','edit','glob','grep','job_output','job_list','job_kill','load_workspace_dependencies','personalPlan','ask_user','baidu_maps','activity_history','todo_write','skill','user_memory','web_search','web_fetch','session_event_search','session_event_read','schedule_create','schedule_list','notify_user','schedule_next_check','proactive_control','send_wechat_image'}<=names
+        assert ({'schedule_update','schedule_delete'}<=names)^({'schedule_view','schedule_edit'}<=names)
+        assert not names&{'subagent','subagent_fork','ask_user_question','working_directory','create_goal','session_search'}
         d.stop();await d.start();await d.wait(lambda:d.get()['running'])
         d.services.push('confirm','1');await d.wait(lambda:len(d.services.apple.writes)==1 and len(d.services.sent)>1)
         assert '你叫黎曼' in json.dumps(d.model.requests[-1],ensure_ascii=False)
@@ -269,7 +276,10 @@ async def test_native_models_tool_switches_apply_and_restart(tmp_path):
         d.services.push('disabled-tools','今天你好，请继续聊天。')
         await d.wait(lambda:len(d.services.sent)>0)
         names={t['function']['name'] if 'function' in t else t['name'] for t in d.model.requests[-1]['tools']}
-        assert names=={'bash','read','read_image','write','edit','glob','grep','job_output','job_list','job_kill','load_workspace_dependencies','ask_user','skill','todo_write','user_memory','web_search','web_fetch','session_event_search','session_event_read','schedule_create','schedule_list','schedule_update','schedule_delete','notify_user','schedule_next_check','proactive_control','send_wechat_image'}
+        # Native presets may add tools; assert channel capabilities and boundaries.
+        assert {'bash','read','read_image','write','edit','glob','grep','job_output','job_list','job_kill','load_workspace_dependencies','ask_user','skill','todo_write','user_memory','web_search','web_fetch','session_event_search','session_event_read','schedule_create','schedule_list','notify_user','schedule_next_check','proactive_control','send_wechat_image','activity_history'}<=names
+        assert ({'schedule_update','schedule_delete'}<=names)^({'schedule_view','schedule_edit'}<=names)
+        assert not names&{'personalPlan','baidu_maps','subagent','session_search','ask_user_question'}
         assert all('baidu-ai-map' not in block for block in re.findall(r'<available_skills>(.*?)</available_skills>',json.dumps(d.model.requests[-1],ensure_ascii=False),re.S))
         assert d.model.requests[-1]['model']=='test-model' and d.get()['defaultModel']==original_default
         before=(root/'config.json').read_bytes()

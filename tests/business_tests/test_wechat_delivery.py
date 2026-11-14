@@ -301,3 +301,35 @@ def test_wechat_sends_all_bubbles_with_default_config(split_multiline):
     assert result.ok
     assert sent == ([*lines, preview, *lines] if split_multiline else lines)
     assert result.message_count == len(sent)
+
+@pytest.mark.parametrize('final', ['success', 'rejected', 'timeout', 'refreshed'])
+def test_prepare_failure_uses_one_tokenless_attempt_and_preserves_fresh_context(caplog, final):
+    caplog.set_level(logging.INFO)
+    calls=[];token=['old-context'];cleared=[]
+    async def post(url, body, headers, timeout):
+        calls.append(body['msg'])
+        if len(calls)==1:return {'ret':-2,'errmsg':'prepare failed'}
+        if final=='timeout':raise TimeoutError()
+        if final=='rejected':return {'ret':-2,'errmsg':'prepare failed'}
+        if final=='refreshed':token[0]='fresh-context'
+        return {'ret':0}
+    def clear(ref):cleared.append(True);token[0]=''
+    send=create_wechat_send_text_fn(WeChatConfig(token='secret'),post_json_fn=post,
+        context_token_provider=lambda ref:token[0],context_token_clearer=clear,client_id_factory=lambda:'same-id')
+    result=asyncio.run(send(ConversationRef(platform='wechat',chat_id='user'),'test'))
+    assert len(calls)==2 and calls[0]['context_token']=='old-context'
+    assert not calls[1].get('context_token')
+    assert calls[0]['client_id']==calls[1]['client_id']=='same-id'
+    assert result.ok==(final in ('success','refreshed'))
+    assert bool(cleared)==(final=='success')
+    assert result.retryable==(final=='rejected')
+    assert token[0]==('' if final=='success' else 'fresh-context' if final=='refreshed' else 'old-context')
+    assert len(events(caplog,'wechat.send.context_retry'))==1
+
+
+def test_prepare_failure_without_context_does_not_retry():
+    calls=[]
+    async def post(*args):calls.append(1);return {'ret':-2,'errmsg':'prepare failed'}
+    send=create_wechat_send_text_fn(WeChatConfig(token='secret'),post_json_fn=post)
+    result=asyncio.run(send(ConversationRef(platform='wechat',chat_id='user'),'test'))
+    assert not result.ok and result.retryable and len(calls)==1

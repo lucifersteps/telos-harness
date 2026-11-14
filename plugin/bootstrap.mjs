@@ -8,8 +8,10 @@ import * as WeChat from './index.mjs';
 import {component} from './component.mjs';
 import {voiceStatus} from './voice.mjs';
 import {mountDesktop} from './desktop.mjs';
+import {startHealthReceiver} from './health-receiver.mjs';
 export const name='telos-bootstrap';
-export const inject=['cmdlineArgs'];
+export const inject=['cmdlineArgs','agents','agentDefaultModel','credentials','skills','attachments',
+  'sessions','sessionQuery','sessionPersistence','storageDomain','systemPrompt','workingDirectory','tools'];
 export function requireHost(ctx) {
   const missing=['agents','agentDefaultModel','credentials','skills','attachments'].filter(name=>!ctx.get(name));
   if(missing.length)throw new Error('DSH 当前配置缺少 '+missing.join(', ')+'；请使用包含 dsh-base 的宿主配置，Telos 不补装通用服务。');
@@ -30,7 +32,7 @@ export async function readConfig(paths) {
     return config;
   } catch(error) {if(error.code==='ENOENT')return null;throw error;}
 }
-export async function runtime(ctx,paths,config,onFailure) {
+export async function runtime(ctx,paths,config,onFailure,onHealthState) {
   const token=randomBytes(24).toString('hex');
   requireHost(ctx);
   const child=component(ctx,paths,'serve',{TELOS_BUSINESS_TOKEN:token});
@@ -38,7 +40,14 @@ export async function runtime(ctx,paths,config,onFailure) {
   const ready=await Promise.race([child.ready,new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error('Telos 本机组件启动超时。')),30000);})]).finally(()=>clearTimeout(timer));
   if(ready.protocol!==1)throw new Error('Telos 本机组件协议不兼容。');
   child.done.then(()=>{if(!child.stopping)onFailure(new Error('Telos 本机组件已停止。'));},error=>{if(!child.stopping)onFailure(error);});
-  ctx.provide('telosBusiness',{url:ready.url,token,maxSteps:config.max_steps,skillsDir:join(paths.pkg,'skills'),tools:config.tools,modelSelection:config.model_selection});
+  const health=await startHealthReceiver(ctx,paths,config,onHealthState);
+  child.done.finally(()=>health?.stop()).catch(()=>{});
+  // Publish from a settled child: services provided by this still-loading
+  // runtime are not injectable yet. Otherwise awaiting WeChat merely returns
+  // its dependency-waiting fiber and falsely reports startup as complete.
+  await ctx.plugin({name:'telos-business-bridge',apply(scope){
+    scope.provide('telosBusiness',{url:ready.url,token,maxSteps:config.max_steps,skillsDir:join(paths.pkg,'skills'),tools:config.tools,modelSelection:config.model_selection});
+  }});
   await ctx.plugin(WeChat);
 }
 async function run(ctx) {
@@ -74,8 +83,9 @@ async function run(ctx) {
   }
 }
 
-export function apply(ctx) {
-  // Host services may initialize asynchronously. Validate after DSH readiness.
-  const off=ctx.get('appReady').onReady(()=>run(ctx));
-  ctx.effect(()=>off);
+export async function apply(ctx) {
+  // Participate in Host readiness. onReady listeners do not delay the desktop
+  // gateway: a restored tab could acquire a channel session during startup.
+  // Injection waits for required services before we claim persisted sessions.
+  await run(ctx);
 }

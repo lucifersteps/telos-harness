@@ -15,7 +15,38 @@ from runtime import Runtime,ROOT
 
 
 def call(cid,args,name='personalPlan'):
+    if name=='notify_user':args={'assessment':'unknown',**args}
     return {'tool_calls':[{'id':cid,'type':'function','function':{'name':name,'arguments':json.dumps(args,ensure_ascii=False)}}]}
+
+
+def activity_read(cid='activity-read', *, with_plan=True):
+    """Generate a current range when the scripted model reaches this step."""
+    def reply(_request):
+        from datetime import datetime, timedelta, timezone
+        end=datetime.now(timezone.utc)
+        batch=call(cid,{'view':'timeline','start':(end-timedelta(hours=1)).isoformat(),
+                         'end':end.isoformat()},'activity_history')
+        if with_plan:
+            from zoneinfo import ZoneInfo
+            day=end.astimezone(ZoneInfo('Asia/Shanghai')).replace(hour=0,minute=0,second=0,microsecond=0)
+            batch['tool_calls']+=call(cid+'-reminders',{'action':'query','kind':'reminder','include_completed':True})['tool_calls']
+            batch['tool_calls']+=call(cid+'-calendar',{'action':'query','kind':'event','start':day.isoformat(),'end':(day+timedelta(days=1)).isoformat()})['tool_calls']
+        return batch
+    return reply
+
+
+def fake_activity_tool():
+    # The default harness must never inspect the developer's real activity data.
+    # Tests of source adapters explicitly replace this with their own fixtures.
+    from activity_history import DESCRIPTION, PARAMETERS
+    from telos.agent.tools.types import ExecutableTool, ToolExecution
+    async def resolve(args,context):
+        async def execute():
+            return {'status':'partial','view':args.get('view','timeline'),
+                    'sources_status':[{'source':'aw','state':'unavailable','reason':'isolated test source'}],
+                    'activities':[],'notes':['无法核实实际行为。']}
+        return ToolExecution(execute=execute)
+    return ExecutableTool(name='activity_history',description=DESCRIPTION,parameters=PARAMETERS,resolver=resolve)
 
 def draft(title='测试会议'):
     return {'action':'create','kind':'event','fields':{'title':title,'calendar_id':'calendar-event',
@@ -32,6 +63,9 @@ class Model:
                 owner.last_path=self.path
                 item=owner.script.pop(0) if owner.script else '处理完毕。'
                 if callable(item):item=item(request)
+                if isinstance(item,dict) and '_http_status' in item:
+                    self.send_response(item['_http_status']);self.send_header('Content-Type','application/json');self.end_headers()
+                    self.wfile.write(json.dumps({'error':{'message':'simulated model connection failure','type':'test_failure'}}).encode());return
                 message={'role':'assistant','content':item} if isinstance(item,str) else {'role':'assistant','content':'',**item}
                 reason='tool_calls' if message.get('tool_calls') else 'stop'
                 common={'id':f'test-{len(owner.requests)}','model':request['model'],'created':1}
@@ -109,7 +143,10 @@ class Harness:
     def record_events(self,events):
         seen={e['seq'] for e in self.events}
         self.events.extend(e for e in events if e['seq'] not in seen)
-    def restart(self):return Runtime(self.path/'data',self.apple,self.adapter,event_sink=self.record_events,**self.connection)
+    def restart(self):
+        runtime=Runtime(self.path/'data',self.apple,self.adapter,event_sink=self.record_events,**self.connection)
+        runtime.business.tools['activity_history']=fake_activity_tool()
+        return runtime
     async def submit(self,text,key=None,**kwargs):
         self.index+=1;await self.runtime.handle(self.session,key or str(self.index),text,self.ref,**kwargs)
     async def close(self):

@@ -18,7 +18,7 @@ ROOT=Path(__file__).resolve().parents[1]
 def run(*args):subprocess.run([str(a) for a in args],check=True,cwd=ROOT)
 
 def main():
-    parser=argparse.ArgumentParser();parser.add_argument('--version',default='0.4.19');parser.add_argument('--reuse-components',action='store_true')
+    parser=argparse.ArgumentParser();parser.add_argument('--version',default=json.loads((ROOT/'package.json').read_text())['version']);parser.add_argument('--reuse-components',action='store_true')
     parser.add_argument('--reuse-apple',action='store_true',help='Preserve the existing signed Apple component while rebuilding Python')
     parser.add_argument('--sign-identity',default='-',help='Developer ID Application identity; - is local ad-hoc validation only')
     args=parser.parse_args()
@@ -39,7 +39,9 @@ def main():
     (package/'package.json').write_text(json.dumps(metadata,indent=2)+'\n')
     shutil.copy2(ROOT/'LICENSE',package/'LICENSE')
     shutil.copy2(ROOT/'THIRD_PARTY_NOTICES.md',package/'THIRD_PARTY_NOTICES.md')
-    shutil.copy2(ROOT/'packaging/README.md',package/'README.md')
+    # DSH displays a root README above the interactive settings. Keep the full
+    # installation guide available in the package without using that UI slot.
+    shutil.copy2(ROOT/'packaging/README.md',package/'INSTALL.md')
     # Only Telos is installed. Generic services belong to the selected DSH host.
     (package/'cordis.patch.yml').write_text("- insert:\n    - id: telos-bootstrap\n      name: telos-harness\n")
     build_codec(build/'native/telos-silk')

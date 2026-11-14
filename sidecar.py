@@ -28,6 +28,7 @@ from telos.adapters.wechat.login import run_wechat_qr_login
 from telos.adapters.wechat.media import create_wechat_media_resolver,item_type_value
 from telos.adapters.wechat.state import WeChatStateStore
 from telos.core.process_lock import SingleInstanceLock
+from telos.core.logging import ensure_log_file_handler
 from telos.tools.apple.service import AppleService,PersonalAppleClient
 from apple_component import apple_client
 from urllib.parse import urlparse
@@ -46,6 +47,20 @@ def wechat_config(config,store):
         cdn_base_url=value.get('cdn_base_url','https://novac2c.cdn.weixin.qq.com/c2c'),
         allowed_users=[account.user_id] if account and account.user_id else [],
         dm_policy='allowlist',group_policy='disabled',split_multiline_messages=True)
+
+
+def configure_delivery_logging(root):
+    logger = logging.getLogger('telos.adapters.wechat')
+    path = root/'logs'/'wechat-delivery.jsonl'
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    ensure_log_file_handler(path, logger=logger)
+    path.chmod(0o600)
+    logger.setLevel(logging.INFO)
+    # Only the existing safe transport events belong in this diagnostic file.
+    for handler in logger.handlers:
+        if getattr(handler, 'baseFilename', '') == str(path.resolve()) and not handler.filters:
+            handler.addFilter(lambda record: getattr(record, 'event', '').startswith('wechat.send.')
+                              or getattr(record, 'event', '') == 'wechat.inbound.context')
 
 
 class WeChatChannel(Channel):
@@ -133,6 +148,9 @@ class WeChatChannel(Channel):
                 with self.business.db() as db:
                     fresh=db.execute('INSERT OR IGNORE INTO messages(id,session,input) VALUES(?,?,?)',(key,session,turn.text)).rowcount
                     db.execute('INSERT OR REPLACE INTO channel_refs VALUES(?,?)',(session,json.dumps(asdict(turn.ref))))
+                    if fresh:
+                        from wechat_budget import reset
+                        reset(db,session,key)
                 if fresh:
                     task=asyncio.create_task(self.consume(turn,raw,session,key))
                     self.inflight.add(task);task.add_done_callback(self.inflight.discard)
@@ -142,6 +160,9 @@ class WeChatChannel(Channel):
 
 
 async def serve(root,harness_home,config):
+    # The transport already emits whitelisted, redacted receipt fields. Persist
+    # those existing events rather than losing `extra` in stderr's formatter.
+    configure_delivery_logging(root)
     token=os.environ.pop('TELOS_BUSINESS_TOKEN')
     store=WeChatStateStore(root/'wechat');wc=wechat_config(config,store)
     if config['wechat'].get('enabled') and (not wc.account_id or not wc.allowed_users):
@@ -182,7 +203,7 @@ async def command(args):
         if args.command=='configure':
             value=json.load(sys.stdin)
             from settings import runtime_options
-            if not isinstance(value,dict) or set(value)-{'max_steps','persona','persona_file','tools','model_selection','direct_write','proactive'}:raise ValueError('只接受 Telos 非敏感选项；凭据请交给 DSH。')
+            if not isinstance(value,dict) or set(value)-{'max_steps','persona','persona_file','tools','model_selection','direct_write','proactive','health_receiver'}:raise ValueError('只接受 Telos 非敏感选项；凭据请交给 DSH。')
             steps=value.get('max_steps',config.get('max_steps',24))
             if isinstance(steps,bool) or not isinstance(steps,int) or not 1<=steps<=100:raise ValueError('执行步骤应为 1 到 100 的整数。')
             candidate={**config,**value,'max_steps':steps}

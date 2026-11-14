@@ -25,7 +25,10 @@ export async function mountHostTools(scope,agent) {
   // Also fail closed if a disabled family is registered later by the host.
   scope.tools.guard(exec=>HOST_ONLY.has(exec.name)?'This tool requires a host conversation; use the current WeChat conversation instead.':undefined);
   scope.on('system-prompt/assemble',async (assembly,context,next)=>{
-    assembly.tools=assembly.tools.filter(tool=>!HOST_ONLY.has(tool.name));
+    // DSH 0.2.1 exposes schemas in this hook. In 0.2.2 the hook is text-only:
+    // the native resolved tool set owns declarations and applies the scoped
+    // restriction above. Do not manufacture or mutate a second tool catalogue.
+    if(Array.isArray(assembly.tools))assembly.tools=assembly.tools.filter(tool=>!HOST_ONLY.has(tool.name));
     return next();
   });
   return presets;

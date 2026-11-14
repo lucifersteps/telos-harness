@@ -38,11 +38,12 @@ def test_memory_native_changes_tools_limits_and_resume(tmp_path):
             h.runtime.business.context=context
             next_text='偏好：使用编号列表。'
             file.write_text(next_text)
-            previous=h.model.requests[-1]['messages']
             h.model.script=['好。'];await h.submit('文件已更新')
             assert len(profile_events(h))==before+1
             assert next_text in json.dumps(h.model.requests[-1],ensure_ascii=False)
-            assert h.model.requests[-1]['messages'][:len(previous)]==previous
+            # Old tool transcripts may be retired; human dialogue must survive.
+            wire=json.dumps(h.model.requests[-1],ensure_ascii=False)
+            assert '记住，回答尽量简洁' in wire and '已记住。' in wire
             # Unicode limit, failed writes and stale updates leave the file intact.
             h.model.script=[call('too-long',{'action':'write','content':'字'*1376,'expected_content':next_text},'user_memory'),
                             call('stale',{'action':'write','content':'lost update','expected_content':text},'user_memory'),'未覆盖。']

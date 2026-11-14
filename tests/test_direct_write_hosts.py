@@ -9,9 +9,10 @@ from test_desktop import Desktop,DESKTOP
 from test_history import results,tool_text
 
 @pytest.mark.parametrize('desktop',[False,True])
+@pytest.mark.parametrize('omit_heading',[False,True])
 @pytest.mark.skipif(DESKTOP is None or not ARCHIVE.exists(),reason='Requires built archive and official Desktop runtime')
 @run_async
-async def test_direct_write_toggle_restart_and_undo(tmp_path,desktop):
+async def test_direct_write_toggle_restart_and_undo(tmp_path,desktop,omit_heading):
     h=Desktop(tmp_path) if desktop else Installed(tmp_path,[])
     try:
         if desktop:
@@ -31,11 +32,16 @@ async def test_direct_write_toggle_restart_and_undo(tmp_path,desktop):
             await h.wait(lambda:len(h.services.sent)>before)
         def saved_card(request):
             with sqlite3.connect(h.home/'telos/business.sqlite') as db:
-                return db.execute('SELECT reply FROM messages WHERE reply IS NOT NULL ORDER BY rowid DESC LIMIT 1').fetchone()[0]
+                card=db.execute('SELECT reply FROM messages WHERE reply IS NOT NULL ORDER BY rowid DESC LIMIT 1').fetchone()[0]
+            return card.removeprefix('**已保存**\n')+'\n\n明天日历里暂时没有其他日程。' if omit_heading else card
         h.model.script=[call('direct-create',draft()),saved_card]
         await message('create','创建测试会议')
         assert len(native.writes)==1 and '回复【1】撤销' in json.dumps(h.services.sent,ensure_ascii=False)
-        assert len(h.services.sent)==1
+        await h.wait(lambda:len(h.services.sent)==(2 if omit_heading else 1))
+        texts=[item['msg']['item_list'][0]['text_item']['text'] for item in h.services.sent]
+        assert texts[0].startswith('**已保存**')
+        assert '\n'.join(texts).count('标题：测试会议')==1
+        if omit_heading:assert texts[1]=='明天日历里暂时没有其他日程。'
         h.stop()
         if desktop:await h.start();await h.wait(lambda:h.get()['running'])
         else:h.start()

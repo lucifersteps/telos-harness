@@ -24,13 +24,14 @@ async def share_image(channel, data):
             row=db.execute('SELECT fingerprint,state,result FROM image_receipts WHERE id=?',(delivery_id,)).fetchone()
         if row:
             if row[0]!=fingerprint: raise ValueError('Tool call ID was already used with different arguments')
-            if row[2]: return json.loads(row[2])
+            result={k:v for k,v in json.loads(row[2] or '{}').items() if not k.startswith('_')}
+            if result: return result
             return {'status':'unknown','image':row[1], 'caption':'unknown',
                     'message':'Previous send was interrupted. Do not automatically resend; ask the user whether it arrived.'}
         def save(state,result=None):
             with channel.business.db() as db:
                 db.execute('INSERT OR REPLACE INTO image_receipts VALUES(?,?,?,?)',
-                           (delivery_id,fingerprint,state,json.dumps(result) if result else None))
+                           (delivery_id,fingerprint,state,json.dumps({**(result or {}),'_session':session,'_parts':2 if caption else 1})))
         config=channel.adapter.config
         content=await download_image(image_url)
         item=await upload_image(config,ref.chat_id,content)

@@ -48,3 +48,24 @@ def test_native_context_dedup_and_fresh_tool_reads(tmp_path):
         finally:
             await h.close()
     asyncio.run(run())
+
+
+def test_time_only_chat_turns_and_resume_do_not_append_runtime_snapshots(tmp_path):
+    async def run():
+        h = Harness(tmp_path, ['第一条回复。', '第二条回复。', '恢复后回复。'])
+        try:
+            await h.submit('你好')
+            await asyncio.sleep(.05)
+            await h.submit('继续聊聊')
+            contexts = lambda: [e for e in h.events if e['type'] == 'user/message'
+                and e['data'].get('source', {}).get('kind') == 'runtime-context']
+            assert len(contexts()) == 1
+            await h.runtime.close()
+            h.runtime = h.restart()
+            await h.submit('继续刚才的话题')
+            assert len(contexts()) == 1
+            assert h.sent == ['第一条回复。', '第二条回复。', '恢复后回复。']
+            assert '你好' in json.dumps(h.model.requests[-1], ensure_ascii=False)
+        finally:
+            await h.close()
+    asyncio.run(run())

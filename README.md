@@ -14,7 +14,7 @@
 
 ![Telos 六格漫画：从遗漏安排、反复尝试管理 App，到在微信里发送截图和语音，由 Telos 整理到 Apple 日历与提醒事项，事务虽多依然从容有序。](docs/assets/telos-story.png)
 
-**多一份从容，从 Telos 开始。** [下载安装包](https://github.com/lucifersteps/telos-harness/releases/tag/v0.4.19)，或按下方的[「让 AI 帮你安装」](#让-ai-帮你安装)开始配置。
+**多一份从容，从 Telos 开始。** [下载安装包](https://github.com/lucifersteps/telos-harness/releases/tag/v0.5.2)，或按下方的[「让 AI 帮你安装」](#让-ai-帮你安装)开始配置。
 
 [查看六宫格漫画原图](docs/assets/telos-story.png) · [查看宣传海报（含项目二维码）](docs/assets/telos-poster.png)
 
@@ -62,14 +62,18 @@ DeepSeek Harness（下文简称 DSH）支持桌面版和 CLI，两种方式使�
 | 项目 | 要求 |
 | --- | --- |
 | 电脑 | macOS 14 或更新版本，Apple Silicon（M 系列芯片）；目前不支持 Intel Mac、Windows、Linux |
-| 宿主 | 已验证 DSH **0.2.1-rc.2 / rc.3** 的官方桌面版和 Node/CLI |
+| 宿主 | 已验证 DSH **0.2.1-rc.2 / rc.3**，并适配桌面版 **0.2.2-rc.1** |
 | 模型 | DSH 中可用的模型连接；可复用已有配置，或登录账号、填写自己的 API Key |
 | 微信 | 用户本人扫码登录 |
 | Apple 功能 | 首次配置默认开启日历和提醒事项，由用户在 macOS 弹窗中授权 |
 
 安装包自带 Telos 所需的 Python 运行环境和 Apple 组件，无需安装 Python、Homebrew 或 Xcode。选用 Node/CLI 时，仍需要 DSH 对应的 Node.js 运行环境。
 
-**当前版本：0.4.19。** 从 [0.4.19 Release](https://github.com/lucifersteps/telos-harness/releases/tag/v0.4.19) 下载安装包与 SHA256 校验文件。不要把源码 ZIP 当作插件安装包。
+**当前公开版本：0.5.2。** 从 [0.5.2 Release](https://github.com/lucifersteps/telos-harness/releases/tag/v0.5.2) 下载安装包与 SHA256 校验文件。不要把源码 ZIP 当作插件安装包。
+
+**0.5.2 功能：** 整合可插拔主动消息策略、目标/计划/行为校验、统一健康活动查询及独立观察气泡；已有健康接收端可交由 Telos 管理启停。安装包为 `dist/telos-harness-0.5.2-macos-arm64.tgz`，同目录附 SHA256 文件。0.5.2 修复用户画像重复注入，并清理已完成且送达的工具历史、限制定时检查摘要和状态变更历史；未决操作继续保留。
+
+0.5.2 已包含 DSH 桌面版 `0.2.2-rc.1` 的工具和定时接口适配；升级宿主前先升级插件。升级步骤及调度数据回退限制见[安装包说明](packaging/README.md#数据升级与确认)。
 
 **0.4.19 更新：** 修复补充消息后旧预览不可确认、助手仍提示回复「1」的问题。旧卡暂停确认时保留草稿，回复“重新预览”即可重新校验并展示新卡，核对后再回复【1】确认；过期草稿也可恢复。复用现有草稿和确认流程，不新增状态机或数据库字段，保留文字投递恢复与图片分享能力。
 
@@ -79,7 +83,7 @@ DeepSeek Harness（下文简称 DSH）支持桌面版和 CLI，两种方式使�
 
 当前安装包使用 ad-hoc 签名，尚未完成 Developer ID 公证及另一台实体 Mac 的首次安装验证；如遇系统拦截，见 [排障指南](docs/troubleshooting.md#macos-blocked)。
 
-**插件市场安装来源：** 使用 [0.4.19 预构建安装包](https://github.com/lucifersteps/telos-harness/releases/download/v0.4.19/telos-harness-0.4.19-macos-arm64.tgz)，并核对同一 Release 的 SHA256 文件。仓库根目录的 `package.json` 声明正式插件元数据；源码不包含已编译的 Python 和 Apple 组件，不能直接用 `github:lucifersteps/telos-harness` 代替安装包。市场安装完成后，仍需完成模型配置、微信扫码和 Apple 授权。
+**插件市场安装来源：** 使用 [0.5.2 预构建安装包](https://github.com/lucifersteps/telos-harness/releases/download/v0.5.2/telos-harness-0.5.2-macos-arm64.tgz)，并核对同一 Release 的 SHA256 文件。仓库根目录的 `package.json` 声明正式插件元数据；源码不包含已编译的 Python 和 Apple 组件，不能直接用 `github:lucifersteps/telos-harness` 代替安装包。市场安装完成后，仍需完成模型配置、微信扫码和 Apple 授权。
 
 ## 让 AI 帮你安装
 
@@ -167,3 +171,11 @@ CLI 与桌面使用同一个 `.tgz` 安装包。**CLI 必须保持运行**；关
 对 Telos 感兴趣，或想交流使用体验、功能建议，欢迎添加作者微信：**`lylsysu`**（请备注「Telos」）。
 
 安装包不附带个人密钥、微信登录状态或私人聊天记录。Telos 原创代码采用 [MIT 许可证](LICENSE)，第三方组件保留各自许可，详见 [第三方声明](THIRD_PARTY_NOTICES.md)。
+
+## 行为历史查询
+
+`activity_history` 统一查询 ActivityWatch、屏幕使用时间和日程，支持按设备筛选、统计与时间线。结果注明最新观察时间和缺失；日程仅作计划背景，不计入实际时长。只读数据接口，无 Computer Use。使用与配置见 [工具说明](docs/activity-history.md)。已有屏幕时间采集器和 AW 同步任务仍需保留。
+
+### 主动消息策略（policy.1）
+
+「主动消息」现支持选择一个策略并独立启停。默认迁移为“目标执行督促”，保留原通知节奏；其目标/计划/行为查询校验和导师提示词一起加载。“基础主动联系”按需决定通知，停用策略也不会停用普通聊天里的工具。修改后保存应用。只改策略保留后续心跳和固定提醒时间，取消旧策略的在途检查和后续跟进，避免旧规则继续发送。配置与接口见 `docs/development/proactive.md`（源码仓库）。

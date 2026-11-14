@@ -26,14 +26,14 @@ def init_text_delivery(business):
                        (key, hashlib.sha256(reply.encode()).hexdigest(), '[]', 0, 'legacy_unknown'))
 
 
-async def send_reply_parts(business, session, key, reply, adapter, ref, protected, *, before_part=None):
+async def send_reply_parts(business, session, key, reply, adapter, ref, protected, *, before_part=None, explicit_parts=None):
     async with business.text_delivery_locks.setdefault(key, asyncio.Lock()):
         digest = hashlib.sha256(reply.encode()).hexdigest()
         with business.db() as db:
             row = db.execute('SELECT reply_hash,parts,next_part,state FROM text_outbox WHERE key=?', (key,)).fetchone()
             if not row:
                 size = getattr(getattr(adapter, 'config', None), 'max_text_chars', 1900)
-                parts = [part for bubble in split_reply_bubbles(reply, protected_texts=protected)
+                parts = [part for bubble in (explicit_parts if explicit_parts is not None else split_reply_bubbles(reply, protected_texts=protected))
                          for part in split_text_by_length(bubble, size)]
                 row = (digest, json.dumps(parts), 0, 'ready')
                 db.execute('INSERT INTO text_outbox VALUES(?,?,?,?,?)', (key, *row))

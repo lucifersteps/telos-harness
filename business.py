@@ -23,6 +23,8 @@ from telos.tools.apple.service import canonical, operation_key
 from settings import runtime_options
 from telos.tools.apple.direct import direct_allowed
 from text_delivery import init_text_delivery, send_reply_parts
+from receipt_presentation import strip_saved_card_echoes
+from activity_history import create_activity_tool
 
 SAVED_UNDO_INSTRUCTION='回复【1】撤销；需要修改时直接回复修改内容'
 SAVED_PENDING_INSTRUCTION='如需撤销这次保存，请先回复“取消”结束当前待处理内容，再回复“撤销”。'
@@ -51,7 +53,8 @@ class Business:
                 'parameters':PARAMETERS},'required':['operation','parameters'],'additionalProperties':False},
             resolver=lambda args,invocation:self.maps.resolve(args))
         self.tools={t.name:t for t in [create_personal_plan_tool(data_dir=self.root,options={},
-            service=apple,draft_lookup=self.lookup),create_personal_question_tool(self),maps_tool]}
+            service=apple,draft_lookup=self.lookup),create_personal_question_tool(self),maps_tool,
+            create_activity_tool(apple if self.enabled['apple'] else None,(config or {}).get('activity_history'))]}
         # A request hint concerns draft lineage only; todo ownership stays in Harness.
         for tool in [self.tools['personalPlan']]:
             tool.parameters['properties']['require_confirmation']={'type':'boolean','description':'用户要求先预览/确认时设为 true；不能取消强制确认。'}
@@ -67,8 +70,12 @@ class Business:
 
     def accept(self,session,key,text):
         with self.db() as db:
-            return db.execute('INSERT OR IGNORE INTO messages(id,session,input) VALUES(?,?,?)',
+            fresh=db.execute('INSERT OR IGNORE INTO messages(id,session,input) VALUES(?,?,?)',
                               (key,session,text)).rowcount==1
+            if fresh:
+                from wechat_budget import reset
+                reset(db,session,key)
+            return fresh
 
     def pending(self,session):
         with self.db() as db:row=db.execute('SELECT value FROM pending WHERE session=?',(session,)).fetchone()
@@ -107,7 +114,7 @@ class Business:
             (canonical(result),session,session,cid))
 
     def schemas(self,family=None):
-        selected={'apple':{'personalPlan','ask_user'},'maps':{'baidu_maps'}}.get(family,set())
+        selected={'apple':{'personalPlan','ask_user'},'maps':{'baidu_maps'},'activity':{'activity_history'}}.get(family,set())
         if not self.enabled['apple']:selected.discard('personalPlan')
         if not self.enabled['maps']:selected.discard('baidu_maps')
         return [{'name':t.name,'description':t.description,'parameters':t.parameters} for t in self.tools.values() if t.name in selected]
@@ -400,8 +407,14 @@ class Business:
                 and not self.feedback_after(session,key)):
             pending['delivered']=True;self.set_pending(session,pending)
 
-    def render(self,session,text):
+    def render(self,session,text,*,receipts=()):
         pending=self.pending(session)
+        receipt=self.active.get(session,{}).get('receipt') or {}
+        receipt_texts=list(dict.fromkeys([*receipts,*([receipt['text']] if receipt.get('text') else [])]))
+        cards=self.saved_cards(session,'\n\n'.join(receipt_texts)) if receipt_texts else []
+        text=strip_saved_card_echoes(text,list(dict.fromkeys(card['text'] for card in cards)),
+            protected=[pending.get('text','')] if pending else [],
+            controls=[SAVED_UNDO_INSTRUCTION,SAVED_PENDING_INSTRUCTION])
         # The model composes the reply from native tool results. Do not append a
         # second presentation when it paraphrases or omits the exact approval.
         # Fall back to the authoritative text so confirmation covers what was shown.
@@ -421,8 +434,8 @@ class Business:
             if re.search(r'(?:回[复一]|回一句|回个|发送|输入).{0,24}(?:1|确认|同意)',text):
                 text=PREVIEW_RECOVERY
         parts=[text.strip()] if text.strip() else []
-        receipt=self.active.get(session,{}).get('receipt') or {}
-        if receipt.get('text') and receipt['text'] not in '\n'.join(parts):parts.insert(0,receipt['text'])
+        for receipt_text in reversed(receipt_texts):
+            if receipt_text and receipt_text not in '\n'.join(parts):parts.insert(0,receipt_text)
         text='\n\n'.join(parts)
         if pending:
             for card in self.saved_cards(session,text):

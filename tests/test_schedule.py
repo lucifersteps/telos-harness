@@ -2,6 +2,7 @@
 import asyncio
 import json
 import threading
+from datetime import datetime,timedelta,timezone
 import pytest
 from support import Harness,call,draft
 from test_history import results,tool_text
@@ -17,13 +18,23 @@ async def wait(predicate,timeout=20):
         while not predicate():await asyncio.sleep(.05)
 
 def create(cid,seconds=3):
-    return call(cid,{'title':cid,'prompt':'请发送测试提醒 '+cid,'after_seconds':seconds},'schedule_create')
+    def reply(request):
+        tools=[t.get('function',t) for t in request['tools']]
+        tool=next(t for t in tools if t.get('name')=='schedule_create')
+        schema=tool.get('input_schema',tool.get('parameters'))
+        if 'rrule' in schema['properties']:
+            at=(datetime.now(timezone.utc)+timedelta(seconds=seconds)).strftime('%Y%m%dT%H%M%SZ')
+            timing={'rrule':f'DTSTART:{at}\nRRULE:FREQ=DAILY;COUNT=1','target':'this_session'}
+        else:timing={'after_seconds':seconds}
+        return call(cid,{'title':cid,'prompt':'请发送测试提醒 '+cid,**timing},'schedule_create')
+    return reply
 
 def value(request):return json.loads(tool_text(results(request)[-1]))
 
 def assert_telos(request):
     names={t.get('name') or t['function']['name'] for t in request['tools']}
-    assert NAMES|{'personalPlan','user_memory','session_event_read','web_fetch','bash','read','read_image'}<=names
+    assert {'schedule_create','schedule_list','personalPlan','user_memory','session_event_read','web_fetch','bash','read','read_image'}<=names
+    assert ({'schedule_update','schedule_delete'}<=names)^({'schedule_view','schedule_edit'}<=names)
     assert {'write','edit','glob','grep'}<=names
     assert not names&{'subagent','session_search','ask_user_question'}
 

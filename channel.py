@@ -78,6 +78,9 @@ class Channel(ProactiveChannel,ScheduledDelivery):
             return {'directory':str((self.root/'users'/key).resolve())}
         if path=='/prepare':return await self.prepare(data['session'],data['messages'])
         if path=='/context':return await self.business.context(data['session'])
+        if path=='/history-retention':
+            from context_retention import retention_status
+            return retention_status(self,data)
         if path=='/tool':return await self.business.execute(data['session'],data['id'],data['name'],data['args'],
             **({'map_token':data.get('map_token','')} if data['name']=='baidu_maps' else {}))
         raise ValueError('Unknown business endpoint')
@@ -167,9 +170,7 @@ class Channel(ProactiveChannel,ScheduledDelivery):
                                      or not any(e.get('type')=='tool/result' for e in events)):
                     reply='\n\n'.join(dict.fromkeys(receipts))
                 else:
-                    for receipt in receipts:
-                        if receipt not in reply:reply=receipt+'\n\n'+reply
-                    reply=self.business.render(session,reply)
+                    reply=self.business.render(session,reply,receipts=receipts)
                 # Save the combined outbox and retire its input receipts atomically.
                 for earlier,_,_,_ in rows[:-1]:db.execute("UPDATE messages SET reply='',delivered=1 WHERE id=?",(earlier,))
                 db.execute('UPDATE messages SET reply=? WHERE id=?',(reply,target))

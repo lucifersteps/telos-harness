@@ -3,6 +3,17 @@ import json
 import os
 from pathlib import Path
 
+def health_receiver_options(config):
+    value=config.get('health_receiver',{})
+    if not isinstance(value,dict) or set(value)-{'enabled','root'} or type(value.get('enabled',False)) is not bool:
+        raise ValueError('健康数据接入配置无效。')
+    root=value.get('root')
+    if root is not None and (not isinstance(root,str) or not root or not Path(root).is_absolute()):
+        raise ValueError('健康接收端目录必须是绝对路径。')
+    if value.get('enabled') and not root:
+        raise ValueError('开启健康数据接入前需要配置接收端目录。')
+    return {'enabled':False,**value}
+
 DEFAULTS={'version':1,'max_steps':24,'persona':'default','direct_write':True,'wechat':{'enabled':False}}
 
 def runtime_options(config):
@@ -19,7 +30,7 @@ def runtime_options(config):
             raise ValueError('请选择有效的 DSH 模型。')
     from proactive import validate
     proactive=validate(config.get('proactive'))
-    return {'proactive':proactive,'direct_write':direct,'tools':{'apple':True,'maps':True,**tools},'model_selection':model}
+    return {'health_receiver':health_receiver_options(config),'proactive':proactive,'direct_write':direct,'tools':{'apple':True,'maps':True,**tools},'model_selection':model}
 
 def read_config(root):
     path=Path(root)/'config.json'

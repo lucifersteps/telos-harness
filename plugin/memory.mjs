@@ -36,9 +36,11 @@ export async function mountUserMemory(scope,agent,directory) {
     catch(error){if(error.code!=='EEXIST')throw error;}
   }
   await scope.workingDirectory.set(agent,directory);
-  const chain=scopeChainOf(agent);
+  // scopeChainOf takes the opaque scope KEY, not an Agent object. Cordis 4
+  // exposes activation through state, not the removed fiber.store property.
+  const chain=scopeChainOf(scopeOf(agent.ctx));
   const inherited=[...(scope.registry.get(AgentInstructions)?.fibers??[])].find(fiber=>
-    fiber.store&&(scopeOf(fiber.ctx)===undefined||chain.includes(scopeOf(fiber.ctx))));
+    fiber.state===2&&(scopeOf(fiber.ctx)===undefined||chain.includes(scopeOf(fiber.ctx))));
   if(inherited) {
     // CLI already owns this projection. Reuse its file discovery, not a second
     // loader with a conflicting baseline. This is an alias, not a copied profile.

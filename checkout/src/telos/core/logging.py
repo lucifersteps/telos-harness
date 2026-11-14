@@ -92,7 +92,7 @@ def configure_logging(
         ensure_log_file_handler(log_file)
 
 
-def ensure_log_file_handler(path: str | Path) -> None:
+def ensure_log_file_handler(path: str | Path, *, logger: logging.Logger | None = None) -> None:
     """Attach a rotating JSON-lines file handler to the root logger, once.
 
     Idempotent: repeated calls (or calls from both the web process and the
@@ -102,7 +102,7 @@ def ensure_log_file_handler(path: str | Path) -> None:
     """
     target = Path(path).expanduser()
     abspath = os.path.abspath(str(target))
-    root = logging.getLogger()
+    root = logger if logger is not None else logging.getLogger()
     for existing in root.handlers:
         if isinstance(existing, logging.FileHandler) and getattr(existing, "baseFilename", "") == abspath:
             return

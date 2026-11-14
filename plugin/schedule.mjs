@@ -1,8 +1,9 @@
 // Native scheduling owns rules, durable tasks and timers. This adapter only
 // selects Telos storage and resolves an already-bound WeChat conversation.
-import ScheduleService,{scheduleDomain} from '@deepseek-ai/dsh-schedule';
+import ScheduleService,{scheduleDomain,ScheduleInputError} from '@deepseek-ai/dsh-schedule';
 import * as ScheduleTools from '@deepseek-ai/dsh-tool-schedule';
 import {post} from './bridge.mjs';
+import {hasScheduleTargets,channelSchedule} from './schedule-compat.mjs';
 
 // Both native timers and background-job notices are machine input. Reuse the
 // existing non-human turn protection and durable WeChat outbox for both.
@@ -35,12 +36,15 @@ export function createScheduler(ctx,service,namespace,open,proactive) {
   }};
 }
 
-export async function mountScheduleTools(scope,scheduler,proactive) {
+export async function mountScheduleTools(scope,scheduler,proactive,sessionId) {
   // Keep the original native definitions and caller-session binding. Do not
   // inherit the desktop's unrelated schedule instance into this Agent.
   const local=scope.isolate('schedule');
   const native=scheduler.get('schedule');
-  local.provide('schedule',Object.fromEntries(['create','list','update','delete','catalog'].map(name=>[name,async(...args)=>{
+  const targeted=hasScheduleTargets(native);
+  local.provide('schedule',targeted?channelSchedule(native,sessionId,
+    (session,id)=>proactive?.assertEditable(session,id),reason=>{throw new ScheduleInputError('invalid_rule',reason);}):
+    Object.fromEntries(['create','list','update','delete','catalog'].map(name=>[name,async(...args)=>{
     try{
       if(name==='update'||name==='delete')await proactive?.assertEditable(args[0]?.sessionId,args[0]?.id);
       return await native[name](...args);
@@ -48,7 +52,8 @@ export async function mountScheduleTools(scope,scheduler,proactive) {
   }])));
   await local.plugin(ScheduleTools);
   scope.systemPrompt.section({name:'telos:schedule',order:0,interpolate:false,text:
-    'Use schedule_create/list/update/delete for reminders and recurring tasks requested in this WeChat conversation. Successful tasks run through the native DSH scheduler and replies are sent to this same chat. Tasks require DSH and Telos to be running; overdue work can resume when they restart. These tools manage this chat only, not Apple calendar/reminder objects or desktop chat tasks. Use an explicit time zone for calendar rules; clarify ambiguous times. A scheduled message is never human confirmation for a pending Apple write. Report creation or changes only when the tool succeeds.'});
+    (targeted?'Use schedule_create/list/view/edit; always choose target="this_session". ':'Use schedule_create/list/update/delete. ')+
+    'These tools manage reminders and recurring tasks requested in this WeChat conversation only. Successful tasks run through the native DSH scheduler and replies are sent to this same chat. Tasks require DSH and Telos to be running; overdue work can resume when they restart. They cannot create conversations, access other chats’ tasks, or modify Apple calendar/reminder objects. Use an explicit time zone for calendar rules; clarify ambiguous times. A scheduled message is never human confirmation for a pending Apple write. Report creation or changes only when the tool succeeds.'});
 }
 
 export function conversationTurns(events) {

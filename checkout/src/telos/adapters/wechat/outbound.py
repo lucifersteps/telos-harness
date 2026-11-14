@@ -75,6 +75,7 @@ def create_wechat_send_text_fn(
         if not config.token:
             return SendResult(ok=False, error="WECHAT_TOKEN is not configured", retryable=True)
         context_token = context_token_provider(ref) if context_token_provider else ""
+        original_context_token = context_token
         retried_without_context = False
         client_id = (delivery_log_context.get() or {}).get('client_id') or make_client_id()
         while True:
@@ -125,6 +126,15 @@ def create_wechat_send_text_fn(
                 "receipt": "api_accepted" if accepted else "api_rejected",
                 "client_delivery": "unknown", "elapsed_ms": round((time.monotonic() - started) * 1000)})
             if ret in (0, None) and errcode in (0, None):
+                if retried_without_context:
+                    # A new inbound message may have refreshed the token while
+                    # this request was in flight. Never erase that newer token.
+                    if (context_token_clearer is not None and context_token_provider is not None
+                            and context_token_provider(ref) == original_context_token):
+                        context_token_clearer(ref)
+                    logger.info("无回复上下文的重试已获成功回执", extra={
+                        **detail, "event": "wechat.send.context_recovered",
+                        "original_context_fingerprint": delivery_fingerprint(original_context_token)})
                 return SendResult(
                     ok=True,
                     message_id=str(response.get("msg_id") or response.get("message_id") or ""),
@@ -133,14 +143,13 @@ def create_wechat_send_text_fn(
             if (
                 context_token
                 and not retried_without_context
-                and _is_stale_session(ret, errcode, errmsg)
+                and (_is_stale_session(ret, errcode, errmsg)
+                     or ((ret == -2 or errcode == -2) and str(errmsg).strip().lower() == 'prepare failed'))
             ):
                 retried_without_context = True
-                logger.warning("会话令牌失效，沿用现有策略移除令牌重试", extra={
+                logger.warning("微信明确拒收，沿用现有策略不带回复上下文重试一次", extra={
                     **detail, "event": "wechat.send.context_retry"})
                 context_token = ""
-                if context_token_clearer is not None:
-                    context_token_clearer(ref)
                 continue
             return SendResult(
                 ok=False,

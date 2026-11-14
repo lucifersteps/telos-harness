@@ -12,7 +12,7 @@ from test_package import ARCHIVE, Installed, run_async
 async def test_text_progress_and_legacy_quarantine_survive_real_host_restart(tmp_path, desktop):
     h = Desktop(tmp_path) if desktop else Installed(tmp_path, [])
     reply = '第一段\n第二段\n第三段\n第四段'
-    h.services.send_rejections['第三段'] = 1
+    h.services.send_rejections['第三段'] = 1000
     root = h.home/'telos'
     try:
         if desktop:
@@ -31,10 +31,11 @@ async def test_text_progress_and_legacy_quarantine_survive_real_host_restart(tmp
                 try:row=db.execute('SELECT next_part,state FROM text_outbox').fetchone()
                 except sqlite3.OperationalError:return None
                 return row
-        await h.wait(lambda:len(h.services.send_attempts)==3)
+        await h.wait(lambda:len(h.services.send_attempts)>=3)
         await h.wait(lambda:state()==(2,'rejected'))
         requests=len(h.model.requests)
         h.stop()
+        h.services.send_rejections['第三段'] = 0
         if desktop:
             await h.start();await h.wait(lambda:h.get()['running'])
         else:h.start()

@@ -6,11 +6,11 @@ export async function post(service,path,data,signal) {
   if(!response.ok)throw new Error(await response.text());
   return response.json();
 }
-export async function registerTools(ctx,family,authenticate=async()=>({})) {
+export async function registerTools(ctx,family,authenticate=async()=>({}),execute=(_args,_exec,run)=>run()) {
   const {tools}=await post(ctx.telosBusiness,'/boot',{family});
   for(const schema of tools)ctx.tools.register({
     ...schema,
     output:{schema:{type:'object',additionalProperties:true},render:(_args,value)=>[{type:'text',text:JSON.stringify(value)}]},
-    execute:async(args,exec)=>post(ctx.telosBusiness,'/tool',{session:exec.agent.session.id,id:exec.callId,name:schema.name,args,...await authenticate()},exec.signal)
+    execute:(args,exec)=>execute(args,exec,async()=>post(ctx.telosBusiness,'/tool',{session:exec.agent.session.id,id:exec.callId,name:schema.name,args,...await authenticate()},exec.signal),schema.name)
   });
 }

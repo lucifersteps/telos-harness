@@ -5,6 +5,7 @@ import hashlib
 import json
 import logging
 from text_delivery import send_reply_parts
+from wechat_budget import NOTICE_PREFIX, view as budget_view
 
 from telos.adapters.base import ConversationRef
 from telos.adapters.delivery import split_reply_bubbles,split_text_by_length,delivery_log_context
@@ -79,16 +80,32 @@ class ScheduledDelivery:
                             continue
                         def before_part():
                             self.known_ref(session)
-                            return self.proactive.eligible(self.proactive.event(proactive_id,session))
-                        ok=await send_reply_parts(self.business,session,key,event['message'],self.adapter,ref,[event['message']],before_part=before_part)
+                            if not self.proactive.eligible(self.proactive.event(proactive_id,session)):
+                                return False
+                            with self.business.db() as db:
+                                budget=budget_view(db,session,proactive_id)
+                                receipt=db.execute('SELECT next_part,state FROM text_outbox WHERE key=?',(key,)).fetchone()
+                            notice=event.get('detail','').startswith(NOTICE_PREFIX)
+                            if budget and (budget['remaining']==0 or
+                                           (receipt[0]==0 and (budget['blocked'] or not notice and budget['remaining']<=2))):
+                                # Recheck immediately before transport. A queued normal
+                                # pair must not spend the last allowance on its first half.
+                                self.proactive.mark(proactive_id,'skipped','发送前预算已变化，留待下次收尾提醒')
+                                with self.business.db() as db:db.execute('UPDATE messages SET delivered=1 WHERE id=?',(key,))
+                                return False
+                            return True
+                        parts=[event['observation'],event['message']] if event.get('observation') is not None else [event['message']]
+                        reply='\n\n'.join(parts)
+                        ok=await send_reply_parts(self.business,session,key,reply,self.adapter,ref,parts,before_part=before_part,
+                                                  explicit_parts=parts if event.get('observation') is not None or event.get('detail','').startswith(NOTICE_PREFIX) else None)
                         if ok:
                             with self.business.db() as db:
                                 db.execute('UPDATE messages SET delivered=1 WHERE id=?',(key,))
-                                db.execute("UPDATE proactive_events SET state='sent',detail='' WHERE id=?",(proactive_id,))
+                                db.execute("UPDATE proactive_events SET state='sent',sent_at=COALESCE(sent_at,?),detail=CASE WHEN detail LIKE ? THEN detail ELSE '' END WHERE id=?",(self.proactive.now(),NOTICE_PREFIX+'%',proactive_id))
                         else:
                             with self.business.db() as db:receipt=db.execute('SELECT state FROM text_outbox WHERE key=?',(key,)).fetchone()
                             if receipt and receipt[0] in ('unknown','sending','legacy_unknown'):
-                                self.proactive.mark(proactive_id,'unknown','投递结果未知，未自动重发')
+                                self.proactive.mark(proactive_id,'unknown',event['detail'] if event.get('detail','').startswith(NOTICE_PREFIX) else '投递结果未知，未自动重发')
                             else:blocked.add(session)
                         continue
                     with self.business.db() as db:
@@ -111,13 +128,16 @@ class ScheduledDelivery:
             except Exception:
                 blocked.add(session)
                 logging.exception('定时回复发送失败，保留待发送记录')
+        return bool(blocked)
 
     def start_schedule_sender(self):
         if self.schedule_sender:return
         async def send():
             while True:
-                await self.drain_scheduled()
-                await asyncio.sleep(2)
+                rejected = await self.drain_scheduled()
+                # Reuse this drain's existing failure set; no retry counters,
+                # timers in the database, or new delivery states are needed.
+                await asyncio.sleep(10 if rejected else 2)
         self.schedule_sender=asyncio.create_task(send())
 
     async def stop_schedule_sender(self):
