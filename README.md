@@ -83,6 +83,8 @@ DeepSeek Harness（下文简称 DSH）支持桌面版和 CLI，两种方式使�
 
 当前安装包使用 ad-hoc 签名，尚未完成 Developer ID 公证及另一台实体 Mac 的首次安装验证；如遇系统拦截，见 [排障指南](docs/troubleshooting.md#macos-blocked)。
 
+**0.5.2 验证限制：** 全量回归仍有未解决项，已复现 DSH 0.2.2 桌面会话压缩后历史回查的兼容错误；异常媒体后的预览续接等场景仍待核对。详见[发布验证记录](docs/development/release-0.5.2-validation.md)。
+
 **插件市场安装来源：** 使用 [0.5.2 预构建安装包](https://github.com/lucifersteps/telos-harness/releases/download/v0.5.2/telos-harness-0.5.2-macos-arm64.tgz)，并核对同一 Release 的 SHA256 文件。仓库根目录的 `package.json` 声明正式插件元数据；源码不包含已编译的 Python 和 Apple 组件，不能直接用 `github:lucifersteps/telos-harness` 代替安装包。市场安装完成后，仍需完成模型配置、微信扫码和 Apple 授权。
 
 ## 让 AI 帮你安装
