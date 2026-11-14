@@ -30,6 +30,19 @@ test('only completed acknowledged turns retire; human dialogue and raw history s
   new ContextRetention(restored).apply({eligible:[1,3]});assert.deepEqual(restored.surface.nodes,s.surface.nodes);
 });
 
+test('loaded skill instructions and their call pairs survive cleanup and restart while query data retires',()=>{
+  const s=fresh(),skill=run(s,1,{name:'skill',body:'<skill_content name="test">Follow these instructions.</skill_content>'});
+  const query=run(s,2,{name:'personalPlan',body:'old calendar query'});
+  new ContextRetention(s).apply({eligible:[1,2]});
+  assert.ok(s.surface.nodes.includes(skill.thought.seq));
+  assert.ok(s.surface.nodes.includes(skill.result.seq));
+  assert.ok(!s.surface.nodes.includes(query.result.seq));
+  const restored=Session.create('retention-test',JSON.parse(JSON.stringify(s.snapshotEvents())));
+  new ContextRetention(restored).apply({eligible:[1,2]});
+  assert.ok(allText(restored).includes('Follow these instructions.'));
+  assert.ok(!allText(restored).includes('old calendar query'));
+});
+
 test('hundreds of scheduled turns keep a bounded notification summary, not receipt markers',()=>{
   const s=fresh(),r=new ContextRetention(s);let old;
   for(let t=1;t<=150;t++) {

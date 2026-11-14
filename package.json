@@ -28,6 +28,7 @@
     "./apple": "./plugin/apple.mjs",
     "./maps": "./plugin/maps.mjs",
     "./bootstrap": "./plugin/bootstrap.mjs",
+    "./host-check": "./plugin/host-check.mjs",
     "./client": "./plugin/client.js"
   },
   "os": ["darwin"],

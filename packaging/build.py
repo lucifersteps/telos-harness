@@ -43,7 +43,7 @@ def main():
     # installation guide available in the package without using that UI slot.
     shutil.copy2(ROOT/'packaging/README.md',package/'INSTALL.md')
     # Only Telos is installed. Generic services belong to the selected DSH host.
-    (package/'cordis.patch.yml').write_text("- insert:\n    - id: telos-bootstrap\n      name: telos-harness\n")
+    (package/'cordis.patch.yml').write_text("- insert:\n    - id: telos-host-check\n      name: telos-harness/host-check\n    - id: telos-bootstrap\n      name: telos-harness\n")
     build_codec(build/'native/telos-silk')
     hooks=prepare_sysconfig_hook(build)
     if not args.reuse_components:

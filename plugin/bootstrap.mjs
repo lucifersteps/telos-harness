@@ -13,7 +13,7 @@ export const name='telos-bootstrap';
 export const inject=['cmdlineArgs','agents','agentDefaultModel','credentials','skills','attachments',
   'sessions','sessionQuery','sessionPersistence','storageDomain','systemPrompt','workingDirectory','tools'];
 export function requireHost(ctx) {
-  const missing=['agents','agentDefaultModel','credentials','skills','attachments'].filter(name=>!ctx.get(name));
+  const missing=inject.filter(name=>!ctx.get(name));
   if(missing.length)throw new Error('DSH 当前配置缺少 '+missing.join(', ')+'；请使用包含 dsh-base 的宿主配置，Telos 不补装通用服务。');
 }
 const commands={'--telos-setup':'setup','--telos-login':'login','--telos-authorize':'authorize','--telos-status':'status'};

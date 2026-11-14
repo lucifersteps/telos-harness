@@ -128,6 +128,32 @@ def test_concurrent_duplicate_confirmations_and_failed_delivery_keep_one_write(t
     asyncio.run(run())
 
 
+@pytest.mark.parametrize('has_media',[False,True])
+def test_reordered_confirmation_waits_for_earlier_input_without_revoking_preview(tmp_path,has_media):
+    async def run():
+        h=Harness(tmp_path,[call('p',draft()),'请确认。'])
+        try:
+            await h.submit('创建测试会议')
+            business=h.runtime.business
+            assert business.pending(h.session)['delivered']
+            business.accept(h.session,'earlier','1')
+            business.accept(h.session,'later','1')
+            # Admission to native steer can reverse durable inbox order.
+            await h.runtime.route('/prepare',{'session':h.session,'messages':[{'id':'later','hasMedia':False}]})
+            assert not h.native.writes
+            assert business.pending(h.session)['delivered']
+            await h.runtime.route('/prepare',{'session':h.session,'messages':[{'id':'earlier','hasMedia':has_media}]})
+            assert len(h.native.writes)==(0 if has_media else 1)
+            if has_media:
+                assert not business.pending(h.session)['delivered']
+                # A new textual confirmation cannot bypass that media feedback.
+                business.accept(h.session,'after-media','1')
+                await h.runtime.route('/prepare',{'session':h.session,'messages':[{'id':'after-media','hasMedia':False}]})
+                assert not h.native.writes
+        finally:await h.close()
+    asyncio.run(run())
+
+
 def test_voice_transcription_is_not_confirmation(tmp_path):
     async def run():
         h=Harness(tmp_path,[call('p',draft()),'请确认。','请用文字确认。'])

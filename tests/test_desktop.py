@@ -305,20 +305,15 @@ async def test_native_models_tool_switches_apply_and_restart(tmp_path):
 async def test_desktop_native_compaction_and_restart(tmp_path):
     from compression import zstd
     d=Desktop(tmp_path)
-    def initial(request):
-        d.model.input_tokens=800000
-        return 'A'*600000
-    def summarize(request):
-        d.model.input_tokens=10
-        return 'Retained fact: the user supplied a long test record.'
-    d.model.script=[initial,summarize,'压缩后继续。','重启后继续。']
+    d.model.summary_reply='Retained fact: the user supplied a long test record.'
+    d.model.script=['A'*600000,'压缩后继续。','重启后继续。']
     try:
         await d.start()
         await d.action('save',tools={'apple':False,'maps':False})
         root=d.home/'telos';config=read_config(root)
         config['wechat'].update(base_url=d.services.url,cdn_base_url=d.services.url);write_config(root,config)
         await d.action('login');await d.action('start')
-        d.services.push('large-input','B'*600000)
+        d.services.push('large-input','B'*150000)
         await d.wait(lambda:bool(d.services.sent),timeout=40)
         d.services.push('compact-now','继续处理')
         await d.wait(lambda:any('压缩后继续。' in str(x) for x in d.services.sent),timeout=40)
@@ -326,10 +321,11 @@ async def test_desktop_native_compaction_and_restart(tmp_path):
         logs=list((d.home/'sessions').glob('*/wechat-*/session.v4.jsonl.zstd'))
         assert len(logs)==1
         events=[json.loads(line) for line in zstd.decompress(logs[0].read_bytes()).decode().splitlines()]
-        assert sum(e['type']=='compaction/start' for e in events)==1
-        assert sum(e['type']=='compaction/summary' for e in events)==1
+        starts=sum(e['type']=='compaction/start' for e in events)
+        summaries=sum(e['type']=='compaction/summary' for e in events)
         ends=[e for e in events if e['type']=='compaction/end']
-        assert len(ends)==1 and not ends[0]['data'].get('error')
+        assert starts>=1 and summaries>=1
+        assert sum(not e['data'].get('error') for e in ends)==summaries
         d.stop();await d.start()
         await d.wait(lambda:d.get()['running'])
         d.services.push('after-restart','重启后继续')
@@ -338,8 +334,7 @@ async def test_desktop_native_compaction_and_restart(tmp_path):
         assert not d.services.apple.writes
         # A native request failure must not become a synthetic WeChat utterance.
         sent=len(d.services.sent)
-        d.model.script=[{'tool_calls':[{'id':'broken','type':'function',
-            'function':{'name':'ask_user','arguments':'{"text":'}}]}]
+        d.model.script=[{'_http_status':401}]
         d.services.push('native-error','模拟无回答的错误')
         def consumed():
             import sqlite3

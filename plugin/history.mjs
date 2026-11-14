@@ -6,6 +6,7 @@ const NAMES=new Set(['session_event_search','session_event_read']);
 export function mountHistoryTools(scope,agent,query) {
   SessionQueryTools.apply({
     sessionQuery:query,
+    agents:scope.get('agents'),
     sessionProjections:scope.get('sessionProjections'),
     logger:scope.logger,
     // Replace the native cross-session guidance with current-session guidance.

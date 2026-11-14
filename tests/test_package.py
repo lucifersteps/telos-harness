@@ -252,7 +252,7 @@ async def test_installed_steer_while_model_running(tmp_path):
 def test_package_manifest_and_self_contained_components():
     with tarfile.open(ARCHIVE) as tar:
         manifest=json.load(tar.extractfile('package/component-manifest.json'))
-        assert tar.extractfile('package/cordis.patch.yml').read().decode()=='- insert:\n    - id: telos-bootstrap\n      name: telos-harness\n'
+        assert tar.extractfile('package/cordis.patch.yml').read().decode()=='- insert:\n    - id: telos-host-check\n      name: telos-harness/host-check\n    - id: telos-bootstrap\n      name: telos-harness\n'
         assert 'bin/telos-component' in manifest['files']
         persona=tar.extractfile('package/personas/liman.md').read().decode()
         assert '你叫黎曼' in persona

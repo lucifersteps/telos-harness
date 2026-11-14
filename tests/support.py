@@ -61,7 +61,10 @@ class Model:
                 request=json.loads(self.rfile.read(int(self.headers['Content-Length'])))
                 owner.requests.append(request)
                 owner.last_path=self.path
-                item=owner.script.pop(0) if owner.script else '处理完毕。'
+                # Compaction is an independent model purpose; tests may route
+                # it without consuming scripted business replies/tool calls.
+                item=(owner.summary_reply if request.get('max_tokens')==8192 and hasattr(owner,'summary_reply')
+                      else owner.script.pop(0) if owner.script else '处理完毕。')
                 if callable(item):item=item(request)
                 if isinstance(item,dict) and '_http_status' in item:
                     self.send_response(item['_http_status']);self.send_header('Content-Type','application/json');self.end_headers()

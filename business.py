@@ -86,14 +86,15 @@ class Business:
             if value is None:db.execute('DELETE FROM pending WHERE session=?',(session,))
             else:db.execute('INSERT OR REPLACE INTO pending VALUES(?,?)',(session,canonical(value)))
 
-    def feedback_after(self,session,key,before=None):
+    def feedback_after(self,session,key,before=None,*,include_unprocessed_controls=True):
         # Derive feedback from the existing inbox; numeric controls alone do not
         # change the proposed fields or invalidate an initial delivery retry.
         with self.db() as db:
             rows=db.execute('SELECT input,reply FROM messages WHERE session=? AND rowid>(SELECT rowid FROM messages WHERE id=?)'
                 +(' AND rowid<(SELECT rowid FROM messages WHERE id=?)' if before else ''),
                 (session,key,before) if before else (session,key)).fetchall()
-        return any(row[1] is None or (row[0].strip() and row[0].strip() not in PREVIEW_CONTROLS) for row in rows)
+        return any((row[1] is None and (include_unprocessed_controls or row[0].strip() not in PREVIEW_CONTROLS))
+                   or (row[0].strip() and row[0].strip() not in PREVIEW_CONTROLS) for row in rows)
 
     def lookup(self,session,call_id):
         with self.db() as db:row=db.execute('SELECT origin,args,result FROM drafts WHERE session=? AND id=?',(session,call_id)).fetchone()
@@ -330,8 +331,14 @@ class Business:
         if pending['expires_at']<=time.time():
             pending['delivered']=False;self.set_pending(session,pending)
             return {'status':'deny','text':'预览已过期，草稿仍保留。请回复“重新预览”，核对新卡后再确认。本次未执行操作。'}
-        if self.feedback_after(session,pending['origin'],self.active.get(session,{}).get('key')):
+        current_key=self.active.get(session,{}).get('key')
+        if self.feedback_after(session,pending['origin'],current_key,include_unprocessed_controls=False):
             pending['delivered']=False;self.set_pending(session,pending)
+        elif self.feedback_after(session,pending['origin'],current_key):
+            # Native steer may admit a later inbox row first. An unprocessed
+            # control could still contain media: defer it without approving or
+            # revoking the preview until the earlier input has been classified.
+            return {'status':'deny','text':'还有较早的消息尚未处理，本次确认未执行。请等待处理结果后核对回执。'}
         if not pending.get('delivered'):
             return {'status':'deny','text':PREVIEW_RECOVERY}
         args=pending['args']

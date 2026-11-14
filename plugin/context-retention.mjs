@@ -62,6 +62,19 @@ export class ContextRetention {
     this.sync();const session=this.session,nodes=[...session.surface.nodes];
     const replace=(seqs,source,content=[])=>replaceSurface(session,this.meter,'user/message',createUserMessage({source,content}),seqs);
     const events=nodes.map(seq=>session.eventAt(seq)),retire=new Set(),allowed=new Set(eligible);
+    // Loaded skills are reusable instructions, not completed query data. Keep
+    // their native call/result pairs until native compaction handles them. A
+    // parallel call batch must remain intact to avoid orphaned tool results.
+    const skillCalls=new Set(events.filter(e=>e.type==='tool/result'&&!message(e).isError
+      &&this.calls.get(message(e).source?.callId)?.name==='skill').map(e=>message(e).source.callId));
+    const instructionNodes=new Set(),instructionCalls=new Set();
+    for(const e of events)if(e.type==='assistant/message') {
+      const calls=message(e).content.filter(b=>b.type==='tool-call');
+      if(calls.some(c=>skillCalls.has(c.id))) {
+        instructionNodes.add(e.seq);for(const c of calls)instructionCalls.add(c.id);
+      }
+    }
+    for(const e of events)if(e.type==='tool/result'&&instructionCalls.has(message(e).source?.callId))instructionNodes.add(e.seq);
     const profiles=events.filter(profileBaseline);
     for(const e of profiles.slice(0,-1))retire.add(e.seq);
     // Delivery + current ledger state is authoritative for managed tools.
@@ -78,6 +91,7 @@ export class ContextRetention {
         allowed.delete(this.owners.get(e.seq));
     }
     for(const e of events) {
+      if(instructionNodes.has(e.seq))continue;
       if(kind(e)===RETIRED){retire.add(e.seq);continue;}
       const turn=this.turns.get(this.owners.get(e.seq));
       if(!turn||!allowed.has(turn.turn)||!turn.complete)continue;
