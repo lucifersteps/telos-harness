@@ -41,10 +41,9 @@ test('proactive view keeps deadlines, preferences, delivery state and custom rea
   assert.deepEqual(context,saved);
 });
 
-test('current check includes recovery arguments only when supplied by the active policy',()=>{
- const event={input_id:'owned',kind:'heartbeat',due:1,expires:2,prompt:'check'};
+test('basic checks can remain quiet without experimental prerequisites',()=>{
+ const event={input_id:'owned',kind:'heartbeat',due:1,expires:2,prompt:'check',notification_required:false};
  const input={id:'owned',source:{kind:'schedule'},content:[]};
- const activity={next_call:{name:'activity_history',arguments:{view:'summary',start:'2026-11-07T22:00:37+08:00',end:'2026-11-09T09:00:00+08:00'}}};
- assert.ok(proactiveInput(input,event,activity).content[0].text.includes(stableContext(activity)));
- assert.ok(!proactiveInput(input,event).content[0].text.includes('activity_check'));
+ const text=proactiveInput(input,event).content[0].text;
+ assert.ok(!text.includes('activity_check'));assert.ok(text.includes('否则可静默'));
 });

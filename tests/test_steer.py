@@ -82,7 +82,7 @@ def test_native_skill_and_only_expected_tools_are_available(tmp_path):
         try:
             await h.submit('先查看地图功能的使用方法')
             names={x['name'] for x in h.model.requests[0]['tools']}
-            assert names=={'personalPlan','ask_user','baidu_maps','activity_history','todo_write','skill','user_memory','web_search','web_fetch','session_event_search','session_event_read','schedule_create','schedule_list','schedule_update','schedule_delete','notify_user','schedule_next_check','proactive_control','send_wechat_image','bash','read','read_image','write','edit','glob','grep','job_output','job_list','job_kill'}
+            assert names=={'personalPlan','ask_user','baidu_maps','todo_write','skill','user_memory','web_search','web_fetch','session_event_search','session_event_read','schedule_create','schedule_list','schedule_update','schedule_delete','notify_user','schedule_next_check','proactive_control','send_wechat_image','bash','read','read_image','write','edit','glob','grep','job_output','job_list','job_kill'}
             first=json.dumps(h.model.requests[0],ensure_ascii=False)
             last=json.dumps(h.model.requests[-1],ensure_ascii=False)
             assert 'baidu-ai-map' in first and '<skill_content name=' not in first
@@ -124,6 +124,32 @@ def test_concurrent_duplicate_confirmations_and_failed_delivery_keep_one_write(t
             assert sum('已创建成功' in text for text in h.sent)==1
             await h.submit('1',key='confirm-a');await h.submit('1',key='third')
             assert len(h.native.writes)==1
+        finally:await h.close()
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize('has_media',[False,True])
+def test_reordered_confirmation_waits_for_earlier_input_without_revoking_preview(tmp_path,has_media):
+    async def run():
+        h=Harness(tmp_path,[call('p',draft()),'请确认。'])
+        try:
+            await h.submit('创建测试会议')
+            business=h.runtime.business
+            assert business.pending(h.session)['delivered']
+            business.accept(h.session,'earlier','1')
+            business.accept(h.session,'later','1')
+            # Admission to native steer can reverse durable inbox order.
+            await h.runtime.route('/prepare',{'session':h.session,'messages':[{'id':'later','hasMedia':False}]})
+            assert not h.native.writes
+            assert business.pending(h.session)['delivered']
+            await h.runtime.route('/prepare',{'session':h.session,'messages':[{'id':'earlier','hasMedia':has_media}]})
+            assert len(h.native.writes)==(0 if has_media else 1)
+            if has_media:
+                assert not business.pending(h.session)['delivered']
+                # A new textual confirmation cannot bypass that media feedback.
+                business.accept(h.session,'after-media','1')
+                await h.runtime.route('/prepare',{'session':h.session,'messages':[{'id':'after-media','hasMedia':False}]})
+                assert not h.native.writes
         finally:await h.close()
     asyncio.run(run())
 

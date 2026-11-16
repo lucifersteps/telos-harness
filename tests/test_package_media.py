@@ -45,7 +45,7 @@ async def test_installed_encrypted_image_preview_restart_confirm(tmp_path,quoted
 @pytest.mark.parametrize('partial',[False,True])
 @run_async
 async def test_installed_missing_image_cannot_confirm_or_read_local_file(tmp_path,partial):
-    h=Installed(tmp_path,[call('preview',draft()),'请确认。',call('renewed',draft()),'图片不完整，请重新发送；原日程重新预览。','已保存。'])
+    h=Installed(tmp_path,[call('preview',draft()),'请确认。',call('renewed',{'action':'revise','draft_call_id':'preview','request_mode':'continue'}),'图片不完整，请重新发送；原日程重新预览。','已保存。'])
     try:
         h.run('--telos-login');h.start();h.services.push('create','创建会议');await h.wait(lambda:len(h.services.sent)>0)
         private=tmp_path/'private.png';private.write_bytes(b'PRIVATE-FILE-CONTENT')
@@ -61,7 +61,7 @@ async def test_installed_missing_image_cannot_confirm_or_read_local_file(tmp_pat
 
 @run_async
 async def test_installed_unprepared_voice_keeps_supplement_and_pending_preview(tmp_path):
-    h=Installed(tmp_path,[call('p',draft()),'请确认。',call('renewed',draft()),'语音未能识别，原日程重新预览。','已保存。'])
+    h=Installed(tmp_path,[call('p',draft()),'请确认。',call('renewed',{'action':'revise','draft_call_id':'p','request_mode':'continue'}),'语音未能识别，原日程重新预览。','已保存。'])
     try:
         h.run('--telos-login');h.start();h.services.push('request','创建会议');await h.wait(lambda:len(h.services.sent)>0)
         item=asset(h,b'\0\0'*16000,3,'voice',encode_type=1,sample_rate=16000)

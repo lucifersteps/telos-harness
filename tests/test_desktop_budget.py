@@ -17,13 +17,11 @@ async def test_packaged_budget_notice_and_new_inbound_restore(tmp_path):
     try:
         await h.start();await h.action('save',tools={'apple':False,'maps':False})
         cfg=read_config(root);cfg['wechat'].update(base_url=h.services.url,cdn_base_url=h.services.url)
-        cfg['activity_history']={'aw_url':h.services.url,'screen_time_db':str(root/'absent.db'),'health_enabled':False}
         write_config(root,cfg);await h.action('login');await h.action('start')
         h.model.script=['\n'.join('普通回复'+str(i) for i in range(8))];h.services.push('bind-budget','隔离测试')
         await h.wait(lambda:len(texts())==8)
         await h.action('stop');store=ProactiveStore(root);session=store.status()['sessions'][0]['session']
         p=defaults();p.update(enabled=True,session=session);p['heartbeat']['enabled']=False
-        p['policy']['configs']['goal_execution']['observation_enabled']=True
         await h.action('save',proactive=p);_,rev,_=store.sync()
         with store.db() as db:eid=store._insert(db,session,rev,'heartbeat',time.time()+1,'normal check')
         notice='微信快把我的小喇叭静音啦🥺\n回我一句就能续上，这条之后先乖乖等你～'

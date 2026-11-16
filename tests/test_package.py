@@ -152,7 +152,7 @@ async def test_installed_first_setup_restart_upgrade_and_no_duplicate(tmp_path):
         h.services.push('unauthorized','恶意请求',user='other');h.services.push('request','添加测试会议')
         await h.wait(lambda:len(h.services.sent)>=1)
         assert not h.services.apple.writes
-        assert {t['name'] for t in h.model.requests[0]['tools']}=={'bash','read','read_image','write','edit','glob','grep','job_output','job_list','job_kill','personalPlan','ask_user','baidu_maps','activity_history','todo_write','skill','user_memory','web_search','web_fetch','session_event_search','session_event_read','schedule_create','schedule_list','schedule_update','schedule_delete','notify_user','schedule_next_check','proactive_control','send_wechat_image'}
+        assert {t['name'] for t in h.model.requests[0]['tools']}=={'bash','read','read_image','write','edit','glob','grep','job_output','job_list','job_kill','personalPlan','ask_user','baidu_maps','todo_write','skill','user_memory','web_search','web_fetch','session_event_search','session_event_read','schedule_create','schedule_list','schedule_update','schedule_delete','notify_user','schedule_next_check','proactive_control','send_wechat_image'}
         assert '<skill_content name=' in json.dumps(h.model.requests[1],ensure_ascii=False)
         h.stop()
         # The business preview and official history survive a real process restart.
@@ -252,7 +252,7 @@ async def test_installed_steer_while_model_running(tmp_path):
 def test_package_manifest_and_self_contained_components():
     with tarfile.open(ARCHIVE) as tar:
         manifest=json.load(tar.extractfile('package/component-manifest.json'))
-        assert tar.extractfile('package/cordis.patch.yml').read().decode()=='- insert:\n    - id: telos-bootstrap\n      name: telos-harness\n'
+        assert tar.extractfile('package/cordis.patch.yml').read().decode()=='- insert:\n    - id: telos-host-check\n      name: telos-harness/host-check\n    - id: telos-bootstrap\n      name: telos-harness\n'
         assert 'bin/telos-component' in manifest['files']
         persona=tar.extractfile('package/personas/liman.md').read().decode()
         assert '你叫黎曼' in persona

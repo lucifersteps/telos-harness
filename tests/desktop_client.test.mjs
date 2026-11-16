@@ -129,3 +129,17 @@ test('proactive pause and cancellation do not save unsaved configuration or stop
   tree=p.render();await p.find(tree,n=>n.type==='button'&&n.children.includes('暂停主动消息')).props.onClick();
   assert.deepEqual(JSON.parse(p.requests.at(-1).options.body),{action:'proactive',operation:{action:'pause'}});
 });
+
+
+test('core settings retain maps and basic contact without experimental controls',async()=>{
+ const config={enabled:true,session:'chat',timezone:'Asia/Shanghai',notification_mode:'on_demand',
+  heartbeat:{enabled:true,interval_minutes:30,start:'08:00',end:'23:00',prompt:'简单问候'},fixed:[]};
+ const p=await mounted({proactive:{config,sessions:[{session:'chat',label:'微信'}],pending:[],recent:[]}});
+ let tree=p.render();const text=JSON.stringify(tree);
+ assert.ok(text.includes('百度地图'));assert.ok(text.includes('基础联系偏好'));
+ assert.ok(!text.includes('主动消息策略'));assert.ok(!text.includes('健康数据接入'));
+ p.find(tree,n=>n.props['aria-label']==='心跳通知方式').props.onChange({target:{value:'always'}});
+ tree=p.render();await p.find(tree,n=>n.type==='button'&&n.children.includes('保存并应用')).props.onClick();
+ const body=JSON.parse(p.requests.at(-1).options.body);
+ assert.equal(body.proactive.notification_mode,'always');assert.ok(!('policy' in body.proactive));
+});

@@ -90,8 +90,9 @@ async def test_desktop_history_compaction_and_resume(tmp_path):
         config['wechat'].update(base_url=d.services.url,cdn_base_url=d.services.url);write_config(root,config)
         await d.action('login');await d.action('start')
         await send('remember',MARKER+' '+FACT,'已记下。')
-        d.model.script=pressure_script(d.model)+lookup_script('压缩后找回。')
-        await send('pressure','B'*600000,'A'*100)
+        d.model.summary_reply='The user supplied a large temporary record. Earlier restaurant details were omitted.'
+        d.model.script=['A'*600000,*lookup_script('压缩后找回。')]
+        await send('pressure','B'*150000,'A'*100)
         await send('recall','请回查之前提到的餐厅','压缩后找回。')
         assert_recalled(d.model)
         assert d.manage('independent')['historySearchMode']=='never'

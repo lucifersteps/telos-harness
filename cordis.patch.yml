@@ -1,4 +1,6 @@
 # Source manifest. Install the prebuilt Release archive; see docs/install-for-ai.md.
 - insert:
+    - id: telos-host-check
+      name: telos-harness/host-check
     - id: telos-bootstrap
       name: telos-harness

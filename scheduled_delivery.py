@@ -94,10 +94,10 @@ class ScheduledDelivery:
                                 with self.business.db() as db:db.execute('UPDATE messages SET delivered=1 WHERE id=?',(key,))
                                 return False
                             return True
-                        parts=[event['observation'],event['message']] if event.get('observation') is not None else [event['message']]
+                        parts=[event['message']]
                         reply='\n\n'.join(parts)
                         ok=await send_reply_parts(self.business,session,key,reply,self.adapter,ref,parts,before_part=before_part,
-                                                  explicit_parts=parts if event.get('observation') is not None or event.get('detail','').startswith(NOTICE_PREFIX) else None)
+                                                  explicit_parts=parts if event.get('detail','').startswith(NOTICE_PREFIX) else None)
                         if ok:
                             with self.business.db() as db:
                                 db.execute('UPDATE messages SET delivered=1 WHERE id=?',(key,))

@@ -1,5 +1,9 @@
 # Telos
 
+**当前分支：main（核心版）。** 保留微信与 Apple 提醒事项/日历、百度地图、DSH 原生图片/语音/文件/记忆/历史/通用工具、用户定时任务，以及基础心跳和主动问候。目标督促、行为/健康分析及可插拔策略在 [experimental 分支](https://github.com/lucifersteps/telos-harness/tree/experimental)。
+
+分支拆分尚未创建新的正式 Release；现有 v0.5.2 标签与安装包仍为拆分前版本，包含实验功能。源码变更需要重新构建，不能通过重新下载 v0.5.2 获得。
+
 **事务交给 Telos 打理，忙碌也能有条不紊。**
 
 你是否也有过这样的经历：工作和生活中的安排一多，总担心遗漏。为了把事情安排得井井有条，不断下载、尝试各类日程和清单 App，却总要逐项输入标题、设置时间和优先级。微信里刚收到一个安排，又得复制到另一个应用；临时改了时间，还要找出原来的记录重新编辑。
@@ -84,6 +88,8 @@ DeepSeek Harness（下文简称 DSH）支持桌面版和 CLI，两种方式使�
 当前安装包使用 ad-hoc 签名，尚未完成 Developer ID 公证及另一台实体 Mac 的首次安装验证；如遇系统拦截，见 [排障指南](docs/troubleshooting.md#macos-blocked)。
 
 **0.5.2 验证限制：** 全量回归仍有未解决项，已复现 DSH 0.2.2 桌面会话压缩后历史回查的兼容错误；异常媒体后的预览续接等场景仍待核对。详见[发布验证记录](docs/development/release-0.5.2-validation.md)。
+
+上述问题已在后续源码中修复，当前可运行回归为 Python 588 项通过、48 项因环境条件跳过，JavaScript 68 项通过，零失败。详见[修复验证记录](docs/development/regression-fixes-0.5.2.md)；这些修复尚未包含在上述公开的 0.5.2 安装包中。
 
 **插件市场安装来源：** 使用 [0.5.2 预构建安装包](https://github.com/lucifersteps/telos-harness/releases/download/v0.5.2/telos-harness-0.5.2-macos-arm64.tgz)，并核对同一 Release 的 SHA256 文件。仓库根目录的 `package.json` 声明正式插件元数据；源码不包含已编译的 Python 和 Apple 组件，不能直接用 `github:lucifersteps/telos-harness` 代替安装包。市场安装完成后，仍需完成模型配置、微信扫码和 Apple 授权。
 
@@ -174,10 +180,8 @@ CLI 与桌面使用同一个 `.tgz` 安装包。**CLI 必须保持运行**；关
 
 安装包不附带个人密钥、微信登录状态或私人聊天记录。Telos 原创代码采用 [MIT 许可证](LICENSE)，第三方组件保留各自许可，详见 [第三方声明](THIRD_PARTY_NOTICES.md)。
 
-## 行为历史查询
+## 基础主动联系
 
-`activity_history` 统一查询 ActivityWatch、屏幕使用时间和日程，支持按设备筛选、统计与时间线。结果注明最新观察时间和缺失；日程仅作计划背景，不计入实际时长。只读数据接口，无 Computer Use。使用与配置见 [工具说明](docs/activity-history.md)。已有屏幕时间采集器和 AW 同步任务仍需保留。
+用户指定的定时任务由 DSH 执行。基础心跳在允许的时间段定期检查近期对话：默认有值得联系的内容时发送，否则静默；可选择每次检查都发送。固定问候按各自时间与提示词执行，支持暂停、恢复和取消。主线不要求查询目标、行为或健康数据，不加载导师策略。
 
-### 主动消息策略（policy.1）
-
-「主动消息」现支持选择一个策略并独立启停。默认迁移为“目标执行督促”，保留原通知节奏；其目标/计划/行为查询校验和导师提示词一起加载。“基础主动联系”按需决定通知，停用策略也不会停用普通聊天里的工具。修改后保存应用。只改策略保留后续心跳和固定提醒时间，取消旧策略的在途检查和后续跟进，避免旧规则继续发送。配置与接口见 `docs/development/proactive.md`（源码仓库）。
+配置及分支切换见 [主动消息说明](docs/development/proactive.md)。

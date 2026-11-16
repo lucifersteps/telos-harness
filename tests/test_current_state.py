@@ -11,7 +11,7 @@ def states(request):
         if isinstance(blocks,str):blocks=[{'type':'text','text':blocks}]
         for block in blocks:
             text=block.get('text','')
-            if text.startswith('Current Telos and habit state ('):
+            if text.startswith('Current Telos state ('):
                 result.append(json.loads(text.split('\n',1)[1]))
     return result
 

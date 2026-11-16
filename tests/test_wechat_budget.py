@@ -8,7 +8,9 @@ from business import Business
 from proactive_channel import ProactiveChannel
 from scheduled_delivery import ScheduledDelivery
 from test_proactive import configured
-from test_proactive_observation import enable
+def enable(root):
+    from settings import read_config,write_config
+    config=read_config(root);config['proactive']['notification_mode']='always';write_config(root,config)
 from telos.adapters.base import ConversationRef, SendResult
 from telos.adapters.wechat.adapter import WeChatAdapter
 from wechat_budget import view, totals, NOTICE_PREFIX
@@ -43,7 +45,7 @@ class Fixture(ProactiveChannel, ScheduledDelivery):
 
 
 @pytest.mark.parametrize('used',[7,8,9,10])
-def test_reserves_notice_before_two_bubble_pair(tmp_path,used):
+def test_reserves_notice_before_basic_notification(tmp_path,used):
     async def run():
         f=Fixture(tmp_path,used);eid=f.event()
         admitted=await f.admit(eid)
@@ -53,13 +55,13 @@ def test_reserves_notice_before_two_bubble_pair(tmp_path,used):
         notice=used>=8
         assert bool(context['events'][0].get('budget_notice'))==notice
         if notice:
-            assert context['policy']['enabled'] is False
+            assert 'policy' not in context
             assert 'observation_window' not in context['events'][0]
             with pytest.raises(ValueError):
-                await f.notify_proactive(f.session,eid,'input-'+eid,'normal','observation')
-        await f.notify_proactive(f.session,eid,'input-'+eid,'微信快把我的小喇叭静音啦🥺\n回我一句，我就能继续陪你～' if notice else '建议',None if notice else '观察')
+                await f.proactive_route('/proactive/notify',{'session':f.session,'event_id':eid,'input_id':'input-'+eid,'message':'normal','observation':'unsupported'})
+        await f.notify_proactive(f.session,eid,'input-'+eid,'微信快把我的小喇叭静音啦🥺\n回我一句，我就能继续陪你～' if notice else '建议')
         await f.drain_scheduled()
-        assert len(f.sent)==(1 if notice else 2)
+        assert len(f.sent)==1
         assert f.proactive.event(eid,f.session)['state']=='sent'
         if notice:
             assert not (await f.admit(f.event()))['allowed']
@@ -83,8 +85,8 @@ def test_notice_rejection_restart_duplicate_inbound_and_recovery(tmp_path):
         f.business.accept(f.session,'new-inbound','我回来啦')
         eid2=f.event();assert (await f.admit(eid2))['allowed']
         with f.business.db() as db:assert view(db,f.session,eid2)['remaining']==10
-        await f.notify_proactive(f.session,eid2,'input-'+eid2,'新建议','新观察')
-        await f.drain_scheduled();assert len(f.sent)==3
+        await f.notify_proactive(f.session,eid2,'input-'+eid2,'新建议')
+        await f.drain_scheduled();assert len(f.sent)==2
     asyncio.run(run())
 
 
@@ -101,7 +103,7 @@ def test_new_inbound_cancels_queued_notice(tmp_path):
 def test_budget_rechecked_before_transport_and_notice_text_varies(tmp_path):
     async def run():
         f=Fixture(tmp_path,7);eid=f.event();await f.admit(eid)
-        await f.notify_proactive(f.session,eid,'input-'+eid,'建议','观察')
+        await f.notify_proactive(f.session,eid,'input-'+eid,'普通问候\n建议')
         # Another confirmed output consumes the normal pair's spare bubble.
         with f.business.db() as db:
             db.execute("UPDATE text_outbox SET parts=?,next_part=8 WHERE key='inbound'",(json.dumps(['part']*8),))
@@ -123,10 +125,10 @@ def test_budget_rechecked_before_transport_and_notice_text_varies(tmp_path):
     asyncio.run(run())
 
 
-def test_partial_pair_keeps_reserved_second_bubble_before_notice(tmp_path):
+def test_partial_long_notification_keeps_reserved_second_chunk(tmp_path):
     async def run():
         f=Fixture(tmp_path,7);eid=f.event();await f.admit(eid)
-        await f.notify_proactive(f.session,eid,'input-'+eid,'建议','观察')
+        await f.notify_proactive(f.session,eid,'input-'+eid,'a'*1900+'b'*100)
         calls=[]
         async def send(ref,text):
             calls.append(text)
@@ -136,7 +138,7 @@ def test_partial_pair_keeps_reserved_second_bubble_before_notice(tmp_path):
         notice=f.event();assert (await f.admit(notice))['event']['budget_notice']
         await f.notify_proactive(f.session,notice,'input-'+notice,'微信额度快用完了，回我一句再继续～')
         await f.drain_scheduled()
-        assert len(calls)==4 and calls[1]==calls[2]=='建议'
+        assert len(calls)==4 and calls[1]==calls[2]=='b'*100
         assert f.proactive.event(eid,f.session)['state']==f.proactive.event(notice,f.session)['state']=='sent'
     asyncio.run(run())
 
@@ -172,7 +174,7 @@ def test_native_notice_bypasses_observation_and_plan_queries(tmp_path):
             await wait(lambda:store.event(eid,h.session)['state']=='sent')
             assert h.sent[8:]==[notice]
             wire=json.dumps(h.model.requests[-2],ensure_ascii=False)
-            assert 'budget_notice' in wire and '不传 observation' in wire
+            assert 'budget_notice' in wire and '不需要额外查询' in wire
             assert not h.native.writes
         finally:await h.close()
     asyncio.run(run())

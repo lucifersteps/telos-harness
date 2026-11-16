@@ -155,6 +155,9 @@ def test_expired_approval_and_changed_object_are_not_written(tmp_path):
             await h.submit('添加会议')
             p=h.runtime.business.pending(h.session);p['expires_at']=0;h.runtime.business.set_pending(h.session,p)
             await h.submit('1');assert not h.native.writes and '过期' in h.sent[-1]
+            # Expiry retains the draft; explicitly cancel before a new task.
+            await h.submit('取消')
+            assert h.runtime.business.pending(h.session) is None
             item=h.apple.detail('reminder','reminder-001')
             h.model.script += [call('update',{'action':'update','kind':'reminder','id':item['id'],
                 'expected_revision':item['revision'],'fields':{'title':'买水果'}}),'请确认。']

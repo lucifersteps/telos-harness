@@ -33,7 +33,7 @@ def retention_status(channel, data):
                 settled = all(r and r[0] and r[1] is not None for r in rows)
                 text = ''
             else:
-                events = [db.execute('SELECT state,message,observation FROM proactive_events WHERE session=? AND input_id=?',
+                events = [db.execute('SELECT state,message FROM proactive_events WHERE session=? AND input_id=?',
                                      (session, key)).fetchone() for key in ids]
                 if all(events):
                     settled = all(r[0] in {'sent', 'quiet', 'skipped', 'cancelled', 'expired'} for r in events)

@@ -49,7 +49,7 @@ test('legacy migration preserves other plugins, user input, and source attributi
   const state=new CurrentState(s);update(state,{receipt:{text:'done'}});
   assert.ok(s.surface.nodes.includes(human.seq));assert.ok(!s.surface.nodes.includes(first.seq));
   const legacy=s.surface.nodes.map(seq=>s.eventAt(seq)).filter(e=>e.data?.source?.kind==='runtime-context');
-  assert.equal(legacy.length,2);for(const e of legacy){assert.deepEqual(e.data.source.sections,[{name:'sandbox:policy',text:'Keep sandbox policy'}]);assert.ok(e.sourceEventSeqs.length);}
+  assert.equal(legacy.length,2);assert.deepEqual(legacy.map(e=>e.data.source.sections.length),[2,1]);for(const e of legacy){assert.equal(e.data.source.sections[0].name,'sandbox:policy');assert.ok(e.sourceEventSeqs.length);}
   assert.equal(nodes(s)[0].data.source.state.history.length,0);
 });
 

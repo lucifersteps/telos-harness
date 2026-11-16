@@ -22,7 +22,6 @@ import {businessContextView,stableContext} from './runtime-context.mjs';
 import {mountCurrentState,CurrentStateRegistry} from './current-state.mjs';
 import {mountContextRetention,compactChatHistory} from './context-retention.mjs';
 import {isQueueWake} from './proactive-queue.mjs';
-import * as Activity from './activity.mjs';
 import {proactiveSchedule} from './schedule-compat.mjs';
 export const name='telos-wechat';
 export const inject=['agents','sessions','sessionQuery','sessionPersistence','storageDomain','systemPrompt','attachments','agentDefaultModel','telosBusiness','workingDirectory','tools'];
@@ -80,8 +79,7 @@ export async function apply(ctx) {
     {
       await scope.plugin(SkillFilesystem,{customSkillDirs:[fileURLToPath(new URL('./document-skills/',import.meta.url)),...(service.tools?.maps===false?[]:[service.skillsDir])],includeDefaultRoots:true,watch:false});
       await mountScheduleTools(scope,scheduler.scope,proactive,agent.session.id);
-      await scope.plugin(Apple,{execute:(args,exec,run,name)=>proactiveTurn.executeTool(name,args,exec,run)});
-      await scope.plugin(Activity,{execute:(args,exec,run,name)=>proactiveTurn.executeTool(name,args,exec,run)});
+      await scope.plugin(Apple);
       if(service.tools?.maps!==false)await scope.plugin(Maps);
     }
     agent.ctx.on('agent/pre-step',async ({step,messages,signal},next)=>{
