@@ -156,6 +156,12 @@ class AppleService:
         if kind == "section" and snapshot.get("container_capabilities",{}).get("sections") is False:
             raise AppleNativeError("当前系统分区读取不可用。",code="read_failed")
         source = snapshot.get("containers", []) if kind in {"list", "group", "section", "event_calendar"} else snapshot["items"]
+        if "flagged" in args and kind in {"", "reminder"} and any(
+                item.get("kind") == "reminder" and item.get("flagged") is None
+                and (not args.get("calendar_ids") or item.get("calendar_id") in args["calendar_ids"])
+                and (args.get("include_completed", False) or not item.get("completed", False))
+                for item in source):
+            raise AppleNativeError("部分提醒事项无法读取旗标，不能给出完整筛选结果。", code="read_failed")
         if args.get("section_ids") and any(item.get("kind")=="reminder" and item.get("section_id") is None
                 and (not args.get("calendar_ids") or item.get("calendar_id") in args["calendar_ids"]) for item in source):
             raise AppleNativeError("部分清单的分区归属读取失败，不能给出完整筛选结果。",code="read_failed")

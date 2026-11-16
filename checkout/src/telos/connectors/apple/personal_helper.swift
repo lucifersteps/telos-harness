@@ -748,9 +748,10 @@ struct PersonalReminderAlerts {
 
     func state(_ id: String) throws -> [String: Any] {
         let object = try reminder(id)
-        guard let flag = remValue(remObject(object, "flaggedContext"), "flagged") as? NSNumber else {
-            throw Failure(code:"unsupported_private_feature",message:"系统未提供旗标读取接口。")
-        }
+        // 私有旗标不可读时保留未知，不阻断公开字段和日历快照。
+        let flag = reminderFlag(object)
+        let flagState: [String: Any] = ["flagged": flag?.boolValue as Any? ?? NSNull(),
+                                      "flagged_supported": flag != nil]
         let extra = try extendedReminderState(object)
         let names = try tags(object)
         let rows = try alerts(object)
@@ -758,13 +759,13 @@ struct PersonalReminderAlerts {
             throw Failure(code: "read_failed", message: "事项包含多个原生提前提醒，需要先在 Apple 中核实。")
         }
         guard let alert = rows.first else {
-            return extra.merging(["tags":names, "flagged":flag.boolValue, "early_reminder_minutes": NSNull(), "early_reminder": NSNull()]){_,n in n}
+            return extra.merging(flagState){_,n in n}.merging(["tags":names, "early_reminder_minutes": NSNull(), "early_reminder": NSNull()]){_,n in n}
         }
         let unit = alert["dueDateDeltaUnit"] as! Int
         let count = alert["dueDateDeltaCount"] as! Int
         let factors = [0: 1, 1: 60, 2: 1440, 3: 10080]
         let minutes = factors[unit].map { -count * $0 }
-        return extra.merging(["tags":names, "flagged":flag.boolValue, "early_reminder_minutes": minutes as Any? ?? NSNull(), "early_reminder": alert]){_,n in n}
+        return extra.merging(flagState){_,n in n}.merging(["tags":names, "early_reminder_minutes": minutes as Any? ?? NSNull(), "early_reminder": alert]){_,n in n}
     }
 
     static func interval(_ minutes: Int) throws -> NSObject {
@@ -792,7 +793,9 @@ struct PersonalReminderAlerts {
             let listChange = try remCall(request, "updateList:", [try native.list(item.calendar.calendarIdentifier)])
             change = try remCall(request, "addReminderWithTitle:toListChangeItem:", [item.title as NSString, listChange])
         } else {
-            change = try remCall(request, "updateReminder:", [try reminder(item.calendarItemIdentifier)])
+            let existing = try reminder(item.calendarItemIdentifier)
+            if fields["flagged"] != nil { try requireReadableReminderFlag(existing) }
+            change = try remCall(request, "updateReminder:", [existing])
         }
         // 只修改本次明确提交的字段；保留位置提醒、附件和其它原生属性。
         for (field, key) in [("title", "titleAsString"), ("notes", "notesAsString"),
@@ -813,6 +816,7 @@ struct PersonalReminderAlerts {
         }
         if let value = fields["tags"] { try replaceTags(change, reminderTagNames(value)) }
         if let flag = fields["flagged"] {
+            try requireReadableReminderFlag(change)
             let context = try remCall(change, "flaggedContext")
             guard context.responds(to:NSSelectorFromString("setFlagged:")) else {
                 throw Failure(code:"unsupported_private_feature",message:"系统未提供旗标写入接口。")
@@ -900,6 +904,19 @@ func remValue(_ object: NSObject?, _ name: String) -> Any? {
     return object.value(forKey: name)
 }
 func remObject(_ object: NSObject?, _ name: String) -> NSObject? { remValue(object, name) as? NSObject }
+
+// KVC 的布尔属性允许 flagged / isFlagged getter；仅在确认 selector 后读取。
+func reminderFlag(_ object: NSObject) -> NSNumber? {
+    guard let context = remObject(object, "flaggedContext"),
+          context.responds(to: NSSelectorFromString("flagged")) ||
+          context.responds(to: NSSelectorFromString("isFlagged")) else { return nil }
+    return context.value(forKey: "flagged") as? NSNumber
+}
+func requireReadableReminderFlag(_ object: NSObject) throws {
+    guard reminderFlag(object) != nil else {
+        throw Failure(code: "unsupported_private_feature", message: "当前系统无法读取该事项的旗标，未执行旗标修改。")
+    }
+}
 func remID(_ object: NSObject?) -> String {
     guard let raw = remObject(object, "remObjectID") ?? remObject(object, "objectID") ?? object else { return "" }
     return (remValue(raw, "uuid") as? NSUUID)?.uuidString ?? ""
