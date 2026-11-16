@@ -129,3 +129,19 @@ def test_legacy_stored_prompt_is_removed_even_after_edit_and_disable(tmp_path):
     assert store._render_event(heartbeat,store.sync()[0])['prompt']=='新的督促提示词'
     config['proactive']['policy']['enabled']=False;write_config(tmp_path,config)
     assert all('督促提示词' not in e['prompt'] for e in store.status()['pending'])
+
+
+def test_switch_from_core_invalidates_managed_checks(tmp_path):
+    from proactive import ProactiveStore, defaults
+    from settings import write_config
+    import json
+    import time
+    config=defaults();config.update(enabled=True,session='wechat-test')
+    write_config(tmp_path,{'version':1,'proactive':config})
+    store=ProactiveStore(tmp_path);_,revision,_=store.sync()
+    core={k:v for k,v in config.items() if k!='policy'}
+    with store.db() as db:
+        db.execute('UPDATE proactive_state SET config=?',(json.dumps(core),))
+        event=store._insert(db,'wechat-test',revision,'followup',time.time()+60,'基础问候',state='queued')
+    assert store.sync()[1]==revision+1
+    assert store.event(event,'wechat-test')['state']=='cancelled'

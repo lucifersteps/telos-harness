@@ -22,7 +22,7 @@ PRESETS = [
 
 def defaults():
     return {'enabled': False, 'session': '', 'timezone': 'Asia/Shanghai',
-        'policy': policies.defaults(),
+        'policy': policies.defaults(), 'notification_mode': 'on_demand',
         'heartbeat': {'enabled': True, 'interval_minutes': 30, 'start': '08:00', 'end': '01:00', 'prompt': DEFAULT_PROMPT},
         'fixed': [{'id': i, 'enabled': False, 'time': t, 'prompt': p, 'days': list(range(7))} for i, t, p in PRESETS]}
 
@@ -133,16 +133,18 @@ class ProactiveStore:
             db.execute('BEGIN IMMEDIATE')
             row = db.execute('SELECT * FROM proactive_state WHERE singleton=1').fetchone()
             revision = row['revision'] if row else 0
-            previous=validate(json.loads(row['config'])) if row else None
+            stored=json.loads(row['config']) if row else None
+            from_core=bool(stored is not None and 'notification_mode' in stored and 'policy' not in stored)
+            previous=validate(stored) if row else None
             if row and row['config']!=encoded:
                 # Old versions stored the full policy prompt in each heartbeat.
                 # Normalize it before the old policy configuration is replaced.
                 for event in db.execute("SELECT id,prompt FROM proactive_events WHERE kind='heartbeat' AND state IN ('planned','running','queued')").fetchall():
                     if policies.owns_prompt(previous['policy'],'heartbeat',event['prompt']):
                         db.execute('UPDATE proactive_events SET prompt=? WHERE id=?',(previous['heartbeat']['prompt'],event['id']))
-            if previous==config:
+            if previous==config and not from_core:
                 if row['config']!=encoded:db.execute('UPDATE proactive_state SET config=? WHERE singleton=1',(encoded,))
-            elif row and {k:v for k,v in previous.items() if k!='policy'}=={k:v for k,v in config.items() if k!='policy'}:
+            elif row and not from_core and {k:v for k,v in previous.items() if k!='policy'}=={k:v for k,v in config.items() if k!='policy'}:
                 # Policy-only changes preserve heartbeat/fixed identities and times.
                 # Old in-flight work and policy-created followups cannot leak across.
                 db.execute("UPDATE proactive_events SET state='cancelled',detail='主动消息策略已修改' WHERE state IN ('running','queued') OR (kind='followup' AND state='planned')")
