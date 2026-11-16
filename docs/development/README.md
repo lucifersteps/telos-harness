@@ -71,3 +71,7 @@ Apple 扩展能力的验证入口：`tests/business_tests/test_extended_apple.py
 普通文字投递由 `text_delivery.py` 持久保存分段计划、已确认位置与发送状态。每段发送前记录 sending；仅明确拒收允许从失败段重试，超时、取消及崩溃后结果未知时暂停自动重放。首次升级把旧版无分段回执的未完成回复标记为 legacy_unknown，原文保留。`tests/test_text_delivery.py` 与 `tests/test_text_delivery_hosts.py` 覆盖部分发送恢复、固定消息 ID、未知结果、并发去重和真实编译包重启；标题、摘要及完整 URL 在段落内合并发送。
 
 主动消息开发方案与配置说明见 [proactive.md](proactive.md)：30 分钟 heartbeat、可选固定提醒、Agent 登记后续检查，以及显式通知与静默输出的边界。
+
+## 分支职责
+
+main 提供微信与 Apple 连接、百度地图、DSH 原生能力、用户定时任务和基础主动联系。experimental 额外提供目标督促与行为健康分析。共有故障先修 main，再合入 experimental；涉及两边已有相同代码的修复可共用提交。实验功能不可通过 main 的配置开关重新加载。构建和发布必须注明分支；实验发布使用 prerelease，不替换历史正式附件。

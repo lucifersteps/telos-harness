@@ -152,7 +152,7 @@ async def test_installed_first_setup_restart_upgrade_and_no_duplicate(tmp_path):
         h.services.push('unauthorized','恶意请求',user='other');h.services.push('request','添加测试会议')
         await h.wait(lambda:len(h.services.sent)>=1)
         assert not h.services.apple.writes
-        assert {t['name'] for t in h.model.requests[0]['tools']}=={'bash','read','read_image','write','edit','glob','grep','job_output','job_list','job_kill','personalPlan','ask_user','baidu_maps','activity_history','todo_write','skill','user_memory','web_search','web_fetch','session_event_search','session_event_read','schedule_create','schedule_list','schedule_update','schedule_delete','notify_user','schedule_next_check','proactive_control','send_wechat_image'}
+        assert {t['name'] for t in h.model.requests[0]['tools']}=={'bash','read','read_image','write','edit','glob','grep','job_output','job_list','job_kill','personalPlan','ask_user','baidu_maps','todo_write','skill','user_memory','web_search','web_fetch','session_event_search','session_event_read','schedule_create','schedule_list','schedule_update','schedule_delete','notify_user','schedule_next_check','proactive_control','send_wechat_image'}
         assert '<skill_content name=' in json.dumps(h.model.requests[1],ensure_ascii=False)
         h.stop()
         # The business preview and official history survive a real process restart.

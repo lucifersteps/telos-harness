@@ -65,9 +65,7 @@ async def test_desktop_retention_and_single_profile_loader(tmp_path):
 @run_async
 async def test_partial_read_and_corrected_notify_retire_after_delivery_and_restart(tmp_path):
     from proactive import ProactiveStore,defaults
-    from support import activity_read
     from test_proactive import next_check
-    from test_proactive_hosts import isolate_activity
     from test_history import results,tool_text
     h=Desktop(tmp_path)
     try:
@@ -76,7 +74,6 @@ async def test_partial_read_and_corrected_notify_retire_after_delivery_and_resta
         helper.write_text(f'#!{sys.executable}\nimport sys,json,urllib.request\nr=urllib.request.urlopen(urllib.request.Request({h.services.url+"/apple"!r},data=json.dumps({{"action":sys.argv[1],"args":json.load(sys.stdin)}}).encode(),headers={{"Content-Type":"application/json"}}))\nprint(r.read().decode())\n');helper.chmod(0o700)
         root=h.home/'telos';config=read_config(root);config['apple_helper']=str(helper)
         config['wechat'].update(base_url=h.services.url,cdn_base_url=h.services.url);write_config(root,config)
-        isolate_activity(root,h.services)
         await h.action('login');await h.action('start')
         h.model.script=['绑定成功。'];h.services.push('bind-retention','绑定清理测试')
         sent=lambda:json.dumps(h.services.sent,ensure_ascii=False)
@@ -84,11 +81,11 @@ async def test_partial_read_and_corrected_notify_retire_after_delivery_and_resta
         store=ProactiveStore(root);session=store.status()['sessions'][0]['session']
         p=defaults();p.update(enabled=True,session=session);p['heartbeat']['enabled']=False
         await h.action('apply',proactive=p)
-        h.services.apple.items[0]['title']='SETTLED_QUERY_SHOULD_RETIRE_5347'
+        h.services.apple.items[0].update(title='SETTLED_QUERY_SHOULD_RETIRE_5347',flagged=None,status='partial')
         start=len(h.model.requests)
         h.model.script=[lambda _:next_check('retention-check',2),'已登记。',
-            call('notify-too-early',{'message':'不得发出这条。'},'notify_user'),
-            activity_read('partial-read'),call('notify-after-read',{'message':'数据不完整，提醒仍已正常发送。'},'notify_user'),'内部完成。']
+            call('notify-too-early',{'message':0},'notify_user'),
+            call('partial-read',{'action':'query','kind':'reminder'}),call('notify-after-read',{'message':'数据不完整，提醒仍已正常发送。'},'notify_user'),'内部完成。']
         h.services.push('start-retention','稍后检查')
         await h.wait(lambda:'数据不完整，提醒仍已正常发送。' in sent())
         await h.wait(lambda:len(h.model.requests)>=start+6)
@@ -101,7 +98,7 @@ async def test_partial_read_and_corrected_notify_retire_after_delivery_and_resta
         await h.wait(lambda:'聊天仍正常。' in sent())
         wire=json.dumps(h.model.requests[-1],ensure_ascii=False)
         assert 'SETTLED_QUERY_SHOULD_RETIRE_5347' not in wire
-        retired={'notify-too-early','partial-read','partial-read-reminders','partial-read-calendar','notify-after-read'}
+        retired={'notify-too-early','partial-read','notify-after-read'}
         assert not any(r.get('tool_use_id') in retired for r in results(h.model.requests[-1]))
         assert '数据不完整，提醒仍已正常发送。' in wire  # Bounded delivered-check summary.
         h.stop();await h.start();await h.wait(lambda:h.get()['running'])

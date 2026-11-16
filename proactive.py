@@ -9,7 +9,6 @@ import sqlite3
 import time
 from zoneinfo import ZoneInfo
 
-import proactive_policies as policies
 
 DEFAULT_PROMPT = '结合当前对话和相关事实判断是否值得联系；有具体事项时发一条简短消息，没有合适内容则静默，不为凑消息编造问题。'
 PRESETS = [
@@ -22,7 +21,7 @@ PRESETS = [
 
 def defaults():
     return {'enabled': False, 'session': '', 'timezone': 'Asia/Shanghai',
-        'policy': policies.defaults(),
+        'notification_mode': 'on_demand',
         'heartbeat': {'enabled': True, 'interval_minutes': 30, 'start': '08:00', 'end': '01:00', 'prompt': DEFAULT_PROMPT},
         'fixed': [{'id': i, 'enabled': False, 'time': t, 'prompt': p, 'days': list(range(7))} for i, t, p in PRESETS]}
 
@@ -33,9 +32,12 @@ def validate(value=None):
         return base
     if not isinstance(value, dict):
         raise ValueError('无效的主动消息配置。')
-    value=policies.migrate(value,DEFAULT_PROMPT,{i:p for i,t,p in PRESETS})
+    # Preserve experimental settings on disk; never execute them in main.
+    value={k:v for k,v in value.items() if k not in {'policy','goal_list_ids','action_list_ids'}}
     if set(value)-set(base):raise ValueError('无效的主动消息配置。')
     base.update(value)
+    if base['notification_mode'] not in ('always','on_demand'):
+        raise ValueError('心跳通知方式必须是 always 或 on_demand。')
     if type(base['enabled']) is not bool or not isinstance(base['session'], str) or len(base['session']) > 256:
         raise ValueError('请选择主动消息接收会话并设置有效开关。')
     if base['enabled'] and not base['session']:
@@ -133,23 +135,10 @@ class ProactiveStore:
             db.execute('BEGIN IMMEDIATE')
             row = db.execute('SELECT * FROM proactive_state WHERE singleton=1').fetchone()
             revision = row['revision'] if row else 0
-            previous=validate(json.loads(row['config'])) if row else None
-            if row and row['config']!=encoded:
-                # Old versions stored the full policy prompt in each heartbeat.
-                # Normalize it before the old policy configuration is replaced.
-                for event in db.execute("SELECT id,prompt FROM proactive_events WHERE kind='heartbeat' AND state IN ('planned','running','queued')").fetchall():
-                    if policies.owns_prompt(previous['policy'],'heartbeat',event['prompt']):
-                        db.execute('UPDATE proactive_events SET prompt=? WHERE id=?',(previous['heartbeat']['prompt'],event['id']))
-            if previous==config:
-                if row['config']!=encoded:db.execute('UPDATE proactive_state SET config=? WHERE singleton=1',(encoded,))
-            elif row and {k:v for k,v in previous.items() if k!='policy'}=={k:v for k,v in config.items() if k!='policy'}:
-                # Policy-only changes preserve heartbeat/fixed identities and times.
-                # Old in-flight work and policy-created followups cannot leak across.
-                db.execute("UPDATE proactive_events SET state='cancelled',detail='主动消息策略已修改' WHERE state IN ('running','queued') OR (kind='followup' AND state='planned')")
-                db.execute('UPDATE proactive_state SET config=? WHERE singleton=1',(encoded,))
-            else:
+            # A branch/config change invalidates old managed checks, not user schedules.
+            if not row or row['config']!=encoded:
                 revision += 1
-                db.execute("UPDATE proactive_events SET state='cancelled',detail='配置已修改' WHERE state IN ('planned','running','queued')")
+                db.execute("UPDATE proactive_events SET state='cancelled',detail='主动消息配置或分支已修改' WHERE state IN ('planned','running','queued')")
                 db.execute('INSERT INTO proactive_state VALUES(1,?,?,?) ON CONFLICT(singleton) DO UPDATE SET config=excluded.config,revision=excluded.revision',
                            (encoded, revision, 0))
             paused = db.execute('SELECT paused_until FROM proactive_state WHERE singleton=1').fetchone()[0]
@@ -226,19 +215,8 @@ class ProactiveStore:
         return {'allowed': True, 'event': self.event(event_id, session)}
 
     def _render_event(self,event,config):
-        event=dict(event);base=event['prompt'];fixed_id=''
-        if event['kind']=='heartbeat':
-            current=config['heartbeat']['prompt']
-            if base==current or policies.owns_prompt(config['policy'],event['kind'],base):base=current
-        elif event['kind']=='fixed':
-            for item in config['fixed']:
-                identity=f"{event['session']}\0{event['revision']}\0fixed\0{event['due']}\0{item['id']}"
-                if hashlib.sha256(identity.encode()).hexdigest()==event['id']:
-                    fixed_id=item['id'];base=item['prompt'];break
-        managed=(event['kind']=='heartbeat' and base==DEFAULT_PROMPT or event['kind']=='fixed' and base==dict((i,p) for i,t,p in PRESETS).get(fixed_id) or event['kind']=='followup')
-        event['prompt']=policies.event_prompt(config['policy'],event,base,fixed_id) if managed else base
-        event.update(policies.event_fields(config['policy'],event,datetime.fromtimestamp(event['due'],ZoneInfo(config['timezone']))))
-        return event
+        return {**event, 'notification_required': event['kind']=='fixed' or
+                event['kind']=='heartbeat' and config['notification_mode']=='always'}
 
     def context(self, session, input_ids):
         config, _, paused = self.sync()
@@ -246,27 +224,12 @@ class ProactiveStore:
             placeholders = ','.join('?' for _ in input_ids)
             events = [dict(r) for r in db.execute(f'SELECT * FROM proactive_events WHERE session=? AND input_id IN ({placeholders})', (session, *input_ids))] if input_ids else []
             recent = [dict(r) for r in db.execute("SELECT kind,due,state,message,detail FROM proactive_events WHERE session=? AND state NOT IN ('planned','covered') AND due<=? ORDER BY due DESC LIMIT 12", (session,self.now()))]
-            notifications = [dict(r) for r in db.execute("SELECT kind,due,state,message,observation,sent_at,detail FROM proactive_events WHERE session=? AND message IS NOT NULL AND state IN ('queued','sent','unknown') ORDER BY COALESCE(sent_at,due) DESC LIMIT 8", (session,))]
+            notifications = [dict(r) for r in db.execute("SELECT kind,due,state,message,sent_at,detail FROM proactive_events WHERE session=? AND message IS NOT NULL AND state IN ('queued','sent','unknown') ORDER BY COALESCE(sent_at,due) DESC LIMIT 8", (session,))]
             pending = [dict(r) for r in db.execute("SELECT * FROM proactive_events WHERE session=? AND state='planned' AND kind IN ('fixed','followup') AND due>? AND revision=(SELECT revision FROM proactive_state WHERE singleton=1) ORDER BY due LIMIT 8", (session,self.now()))]
         zone = ZoneInfo(config['timezone'])
         events=[self._render_event(e,config) for e in events]
-        for event in events:
-            end=event.get('checked_at') or self.now()
-            with self.db() as db:
-                last=db.execute("SELECT COALESCE(sent_at,due) AS at,sent_at FROM proactive_events WHERE session=? AND id!=? AND state='sent' AND message IS NOT NULL AND COALESCE(sent_at,due)<=? ORDER BY at DESC LIMIT 1",(session,event['id'],end)).fetchone()
-                day=datetime.fromtimestamp(end,zone).replace(hour=0,minute=0,second=0,microsecond=0).timestamp()
-                morning_sent=db.execute("SELECT 1 FROM proactive_events WHERE session=? AND id!=? AND state='sent' AND COALESCE(sent_at,due)>=? AND COALESCE(sent_at,due)<=? LIMIT 1",(session,event['id'],day+5*3600,end)).fetchone()
-            start=last['at'] if last else end-3600
-            event['observation_window']={'start':datetime.fromtimestamp(max(start,end-31*86400),zone).isoformat(),
-                'end':datetime.fromtimestamp(end,zone).isoformat(),'basis':'last_delivered' if last and last['sent_at'] else 'legacy_schedule_time' if last else 'first_check_last_hour',
-                'truncated':start<end-31*86400}
-            hour=datetime.fromtimestamp(end,zone).hour
-            event['health_mentions']={'sleep_allowed':(5<=hour<11 and not morning_sent) or hour>=22 or hour<2,
-                'sleep_context':'first_morning' if 5<=hour<11 and not morning_sent else 'bedtime' if hour>=22 or hour<2 else 'not_relevant',
-                'workout_recent_minutes':60}
         pending=[{k:v for k,v in self._render_event(e,config).items() if k in ('kind','due','prompt')} for e in pending]
         return {'events':events,'recent':recent,'recent_notifications':notifications,'pending_checks':pending,
-            'policy':policies.view(config['policy'],datetime.fromtimestamp(self.now(),zone)),
             'settings':{'enabled':config['enabled'] and config['session']==session,'timezone':config['timezone'],
                 'preferences':config['heartbeat']['prompt'],'paused_until':paused},
             'now':datetime.fromtimestamp(self.now(),zone).isoformat()}
@@ -323,6 +286,6 @@ class ProactiveStore:
                     ref = json.loads(r['value'])
                     refs.append({'session': r['session'], 'label': ref.get('user_id', r['session'])})
             pending = [dict(r) for r in db.execute("SELECT * FROM proactive_events WHERE state IN ('planned','running','queued') AND (kind='followup' OR due<?) ORDER BY due LIMIT 100", (self.now()+3600,))]
-            recent = [dict(r) for r in db.execute("SELECT id,session,kind,due,state,detail,message,observation,sent_at FROM proactive_events WHERE state NOT IN ('planned','covered') AND due<=? ORDER BY due DESC LIMIT 30", (self.now(),))]
+            recent = [dict(r) for r in db.execute("SELECT id,session,kind,due,state,detail,message,sent_at FROM proactive_events WHERE state NOT IN ('planned','covered') AND due<=? ORDER BY due DESC LIMIT 30", (self.now(),))]
         pending=[{k:v for k,v in self._render_event(e,config).items() if k in ('id','session','kind','due','prompt','state')} for e in pending]
-        return {'config': config, 'policy_catalog':policies.catalog(), 'paused_until': paused, 'sessions': refs, 'pending': pending, 'recent': recent}
+        return {'config': config, 'paused_until': paused, 'sessions': refs, 'pending': pending, 'recent': recent}

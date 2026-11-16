@@ -3,7 +3,7 @@ import asyncio
 import json
 import time
 
-from support import Harness, activity_read, call
+from support import Harness, call
 from test_proactive import configured
 from test_schedule import wait
 
@@ -27,7 +27,6 @@ def test_model_failure_drains_valid_check_past_expired_head_without_next_tick(tm
                 return {'_http_status':503}
             h.model.script=[fail]*6+[
                 call('read-after-error',{'action':'query','kind':'reminder'}),
-                activity_read(),
                 call('notify-after-error',{'message':'失败后仍有效的检查已恢复。'},'notify_user'),
                 '后台总结不能发送。']
             h.runtime=h.restart();await h.runtime.start()
@@ -37,10 +36,10 @@ def test_model_failure_drains_valid_check_past_expired_head_without_next_tick(tm
             assert store.event(expired,h.session)['state']=='expired'
             assert h.sent==['绑定成功。','失败后仍有效的检查已恢复。']
             assert not h.native.writes
-            # Exactly six failed attempts and four successful continuations.
+            # Exactly six failed attempts and three successful continuations.
             # The transport-only wake marker never causes another model call.
             await asyncio.sleep(.3)
-            assert len(h.model.requests)==11
+            assert len(h.model.requests)==10
             assert 'VALID_AFTER_FAILURE' in json.dumps(h.model.requests[-1])
             leaks=[]
             for i,r in enumerate(h.model.requests):
@@ -49,7 +48,7 @@ def test_model_failure_drains_valid_check_past_expired_head_without_next_tick(tm
             assert not leaks,leaks
             await h.runtime.close();h.runtime=h.restart();await h.runtime.start()
             await asyncio.sleep(.3)
-            assert len(h.model.requests)==11 and h.sent.count('失败后仍有效的检查已恢复。')==1
+            assert len(h.model.requests)==10 and h.sent.count('失败后仍有效的检查已恢复。')==1
         finally:await h.close()
     asyncio.run(run())
 
@@ -67,7 +66,7 @@ def test_expiry_during_tool_continuation_does_not_poison_next_check(tmp_path):
                 time.sleep(.5)
                 with store.db() as db:db.execute('UPDATE proactive_events SET expires=? WHERE id=?',(time.time()-1,first))
                 return call('read-before-expiry',{'action':'query','kind':'reminder'})
-            h.model.script=[slow,activity_read(),call('next-notify',{'message':'下一条正常运行。'},'notify_user'),'内部结束。']
+            h.model.script=[slow,call('next-notify',{'message':'下一条正常运行。'},'notify_user'),'内部结束。']
             h.runtime=h.restart();await h.runtime.start()
             await wait(lambda:'下一条正常运行。' in h.sent)
             await wait(lambda:store.event(second,h.session)['state']=='sent')

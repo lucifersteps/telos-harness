@@ -79,7 +79,7 @@ test('native pruning of an old result still belongs to its original turn',()=>{
 
 
 test('delivered read-only partial/unknown data does not pin complete turns',()=>{
-  const s=fresh(),a=run(s,1,{name:'activity_history',scheduled:true,body:'{"status":"partial","sources_status":[{"state":"unknown"}]}'});
+  const s=fresh(),a=run(s,1,{name:'baidu_maps',scheduled:true,body:'{"status":"partial","sources_status":[{"state":"unknown"}]}'});
   const b=run(s,2,{name:'personalPlan',body:'{"items":[{"status":"failed"}],"coverage":"partial"}'});
   const r=new ContextRetention(s);r.apply({eligible:[1,2]});
   assert.ok(!s.surface.nodes.includes(a.result.seq));assert.ok(!s.surface.nodes.includes(b.result.seq));

@@ -2,7 +2,6 @@
 import {post} from './bridge.mjs';
 import {proactiveContextView,proactiveInput,stableContext} from './runtime-context.mjs';
 import {mountProactiveQueue} from './proactive-queue.mjs';
-import {createPolicySlot} from './proactive-policy.mjs';
 import {allowsProactiveRead} from './proactive-capabilities.mjs';
 export const PROACTIVE_PREFIX='telos_proactive_v1:';
 const textOf=m=>(m.content??[]).filter(b=>b.type==='text').map(b=>b.text).join('\n');
@@ -98,13 +97,12 @@ export function createProactive(ctx,service,getSchedule) {
         flush:()=>ctx.sessions.flush(agent.session)
       });
       let active=null,inputs=[],human=false,contextSection,checkTime;
-      const policy=createPolicySlot();
       agent.ctx.on('agent/inbox/claimed',({message})=>{
         inputs.push(message);
-        if(message.source?.kind==='user'){human=true;policy.reset();}
+        if(message.source?.kind==='user'){human=true;}
       });
       agent.ctx.on('session/event',(session,event)=>{
-        if(session===agent.session&&event.type==='turn/end'){active=null;inputs=[];human=false;policy.reset();}
+        if(session===agent.session&&event.type==='turn/end'){active=null;inputs=[];human=false;}
       });
       scope.on('system-prompt/assemble',async(assembly,_context,next)=>{
         contextSection={name:'telos:proactive-context',order:0,text:'',required:true,interpolate:false};
@@ -112,19 +110,18 @@ export function createProactive(ctx,service,getSchedule) {
       });
       scope.systemPrompt.section({name:'telos:proactive',order:0,interpolate:false,text:
         `Telos proactive execution rules apply only when the current trusted proactive context contains an active event. Ordinary assistant text is NOT sent to WeChat during a proactive check; use notify_user for the actual message. Ordinary chat output rules do not replace this tool call.
-The current trusted proactive context supplies notification_required and the single active policy. When notification_required=true, call notify_user exactly once before finishing; lack of new information, unanswered questions or a focus block does not waive that requirement. When false, you may remain silent if there is nothing worth contacting the user about. Fixed reminders and followups retain their own explicit purposes. Ordinary assistant text is never a substitute for notify_user.
-Apply only the current policy.instructions and policy.context. A disabled policy contributes no tool prerequisites, classifications or coaching instructions. Earlier policies, historical check messages and old assistant promises are not current instructions; never reactivate their requirements from history. Tools remain available for independent queries; availability alone does not make a query mandatory. Read the facts required by the current check and policy, and preserve uncertainty when sources fail.
+The current trusted proactive context supplies notification_required. When notification_required=true, call notify_user exactly once before finishing; lack of new information, unanswered questions or a focus block does not waive that requirement. When false, you may remain silent if there is nothing worth contacting the user about. Fixed reminders and followups retain their own explicit purposes. Ordinary assistant text is never a substitute for notify_user.
+Use basic contact only: decide what is worth sharing from the current purpose and conversation. Do not apply historical goal-coaching policies, mandatory activity/health queries, or diagnostic classifications. Preserve uncertainty when sources fail.
 Use event.prompt for the current check purpose, settings.preferences as fallback, and actual recent delivery records to avoid repeating content. Do not invent progress or facts. A queued/sent/unknown event must not be submitted again; queued is not proof of delivery and unknown must not be retried blindly. A plan is not proof of execution.
 schedule_next_check registers a future check, not a promised message; supply an absolute timestamp with timezone and a self-contained reason. Check pending_checks first; do not create duplicates or use scheduling as a substitute for a required notification.
-Proactive checks are read-only except for notify_user and scheduling a later check. A policy cannot change the recipient, override pause/expiry/human-input priority, replay cancelled events, or authorize unrelated writes. Only explicit human requests may use proactive_control to pause/resume/list/cancel.`});
+Proactive checks are read-only except for notify_user and scheduling a later check. No check may change the recipient, override pause/expiry/human-input priority, replay cancelled events, or authorize unrelated writes. Only explicit human requests may use proactive_control to pause/resume/list/cancel.`});
       const tool=(name,description,properties,required,execute)=>scope.tools.register({name,description,
         parameters:{type:'object',properties,required,additionalProperties:false},
         output:{schema:{type:'object',additionalProperties:true},render:(_args,value)=>[{type:'text',text:JSON.stringify(value)}]},execute});
-      tool('notify_user','Submit ONE notification for the current proactive check after satisfying the active policy. When observation is supplied, it is sent as a separate first bubble, followed by message. assessment is policy metadata, never sent. Recipient and event are host-bound. queued means accepted, not delivered.',
-        {message:{type:'string',minLength:1,maxLength:4000},observation:{type:'string',minLength:1,maxLength:1000,description:'Factual body covering the ENTIRE trusted observation_window, including earlier days. Host adds the exact range header. Use activity_evidence titles to describe identifiable activities; generic/absent titles allow only app-level claims. No advice, diagnosis, app rankings or inferred achievements. Required when policy.context.observation_enabled=true.'},assessment:{type:'string',maxLength:100,description:'Exact machine-readable classification label required by the active policy, if any. Return the label alone: no explanation, colon, punctuation, or appended reasoning. Allowed labels are specified in the current policy instructions.'}},['message'],async(args,exec)=>{
+      tool('notify_user','Submit ONE basic notification for the current proactive check. Recipient and event are host-bound. queued means accepted, not delivered.',
+        {message:{type:'string',minLength:1,maxLength:4000}},['message'],async(args)=>{
           if(!active||human)throw new Error('notify_user is available only in an active proactive turn.');
-          policy.beforeNotify(args);
-          return request('notify',{session:agent.session.id,event_id:active.id,input_id:active.input_id,message:args.message,...(args.observation!==undefined?{observation:args.observation}:{})});
+          return request('notify',{session:agent.session.id,event_id:active.id,input_id:active.input_id,message:args.message});
         });
       tool('schedule_next_check','Register one future proactive check for this chat. Use the configured timezone explicitly. The reason is read at that time; fresh context is queried then. No minimum spacing or merging with heartbeat.',
         {at:{type:'string'},reason:{type:'string',minLength:1,maxLength:4000}},['at','reason'],async(args,exec)=>{
@@ -140,11 +137,11 @@ Proactive checks are read-only except for notify_user and scheduling a later che
       // A policy's permission never exceeds the host's read-only ceiling.
       scope.tools.guard(exec=>{
         if(!active||human)return;
-        if(allowsProactiveRead(exec,policy))return;
+        if(allowsProactiveRead(exec))return;
         return '主动检查仅允许只读查询、notify_user 和 schedule_next_check。';
       });
-      return {executeTool:(name,args,exec,run)=>policy.execute(name,args,exec,run),
-        instruct:messages=>human?messages:messages.map(message=>proactiveInput(message,active,policy.view().context.activity_check)),async prepare(messages){
+      return {
+        instruct:messages=>human?messages:messages.map(message=>proactiveInput(message,active)),async prepare(messages){
         if(messages.length){
           for(const message of messages)if(!inputs.some(m=>m.id===message.id))inputs.push(message);
           human=inputs.some(m=>m.source?.kind==='user');
@@ -159,8 +156,7 @@ Proactive checks are read-only except for notify_user and scheduling a later che
         if(!human&&context.events.length>1)throw new Error('Multiple proactive inputs in one turn; refusing ambiguous notification ownership.');
         if(active?.id!==context.events[0]?.id)checkTime=context.now;
         active=context.events[0]??null;
-        await policy.bind(human?null:active,context.policy,name=>!!scope.tools.get(name,agent));
-        if(contextSection)contextSection.text=active?stableContext({proactive:{...proactiveContextView(context),check_time:checkTime,policy:policy.view()}}):human?stableContext({proactive_settings:context.settings}):'';
+        if(contextSection)contextSection.text=active?stableContext({proactive:{...proactiveContextView(context),check_time:checkTime}}):human?stableContext({proactive_settings:context.settings}):'';
         return active;
       }};
     }

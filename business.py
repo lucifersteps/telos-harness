@@ -24,7 +24,6 @@ from settings import runtime_options
 from telos.tools.apple.direct import direct_allowed
 from text_delivery import init_text_delivery, send_reply_parts
 from receipt_presentation import strip_saved_card_echoes
-from activity_history import create_activity_tool
 
 SAVED_UNDO_INSTRUCTION='回复【1】撤销；需要修改时直接回复修改内容'
 SAVED_PENDING_INSTRUCTION='如需撤销这次保存，请先回复“取消”结束当前待处理内容，再回复“撤销”。'
@@ -53,8 +52,7 @@ class Business:
                 'parameters':PARAMETERS},'required':['operation','parameters'],'additionalProperties':False},
             resolver=lambda args,invocation:self.maps.resolve(args))
         self.tools={t.name:t for t in [create_personal_plan_tool(data_dir=self.root,options={},
-            service=apple,draft_lookup=self.lookup),create_personal_question_tool(self),maps_tool,
-            create_activity_tool(apple if self.enabled['apple'] else None,(config or {}).get('activity_history'))]}
+            service=apple,draft_lookup=self.lookup),create_personal_question_tool(self),maps_tool]}
         # A request hint concerns draft lineage only; todo ownership stays in Harness.
         for tool in [self.tools['personalPlan']]:
             tool.parameters['properties']['require_confirmation']={'type':'boolean','description':'用户要求先预览/确认时设为 true；不能取消强制确认。'}
@@ -115,7 +113,7 @@ class Business:
             (canonical(result),session,session,cid))
 
     def schemas(self,family=None):
-        selected={'apple':{'personalPlan','ask_user'},'maps':{'baidu_maps'},'activity':{'activity_history'}}.get(family,set())
+        selected={'apple':{'personalPlan','ask_user'},'maps':{'baidu_maps'}}.get(family,set())
         if not self.enabled['apple']:selected.discard('personalPlan')
         if not self.enabled['maps']:selected.discard('baidu_maps')
         return [{'name':t.name,'description':t.description,'parameters':t.parameters} for t in self.tools.values() if t.name in selected]

@@ -148,7 +148,7 @@ async def test_desktop_first_setup_auth_login_repair_restart_and_confirm(tmp_pat
         assert list((d.home/'sessions').glob('*/*/session.v*.jsonl.zstd'))
         names={x['name'] for x in d.model.requests[0]['tools']}
         # Host tool additions are inherited; scheduling names changed in 0.2.2.
-        assert {'bash','read','read_image','write','edit','glob','grep','job_output','job_list','job_kill','load_workspace_dependencies','personalPlan','ask_user','baidu_maps','activity_history','todo_write','skill','user_memory','web_search','web_fetch','session_event_search','session_event_read','schedule_create','schedule_list','notify_user','schedule_next_check','proactive_control','send_wechat_image'}<=names
+        assert {'bash','read','read_image','write','edit','glob','grep','job_output','job_list','job_kill','load_workspace_dependencies','personalPlan','ask_user','baidu_maps','todo_write','skill','user_memory','web_search','web_fetch','session_event_search','session_event_read','schedule_create','schedule_list','notify_user','schedule_next_check','proactive_control','send_wechat_image'}<=names
         assert ({'schedule_update','schedule_delete'}<=names)^({'schedule_view','schedule_edit'}<=names)
         assert not names&{'subagent','subagent_fork','ask_user_question','working_directory','create_goal','session_search'}
         d.stop();await d.start();await d.wait(lambda:d.get()['running'])
@@ -277,7 +277,7 @@ async def test_native_models_tool_switches_apply_and_restart(tmp_path):
         await d.wait(lambda:len(d.services.sent)>0)
         names={t['function']['name'] if 'function' in t else t['name'] for t in d.model.requests[-1]['tools']}
         # Native presets may add tools; assert channel capabilities and boundaries.
-        assert {'bash','read','read_image','write','edit','glob','grep','job_output','job_list','job_kill','load_workspace_dependencies','ask_user','skill','todo_write','user_memory','web_search','web_fetch','session_event_search','session_event_read','schedule_create','schedule_list','notify_user','schedule_next_check','proactive_control','send_wechat_image','activity_history'}<=names
+        assert {'bash','read','read_image','write','edit','glob','grep','job_output','job_list','job_kill','load_workspace_dependencies','ask_user','skill','todo_write','user_memory','web_search','web_fetch','session_event_search','session_event_read','schedule_create','schedule_list','notify_user','schedule_next_check','proactive_control','send_wechat_image'}<=names
         assert ({'schedule_update','schedule_delete'}<=names)^({'schedule_view','schedule_edit'}<=names)
         assert not names&{'personalPlan','baidu_maps','subagent','session_search','ask_user_question'}
         assert all('baidu-ai-map' not in block for block in re.findall(r'<available_skills>(.*?)</available_skills>',json.dumps(d.model.requests[-1],ensure_ascii=False),re.S))

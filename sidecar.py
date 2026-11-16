@@ -203,7 +203,7 @@ async def command(args):
         if args.command=='configure':
             value=json.load(sys.stdin)
             from settings import runtime_options
-            if not isinstance(value,dict) or set(value)-{'max_steps','persona','persona_file','tools','model_selection','direct_write','proactive','health_receiver'}:raise ValueError('只接受 Telos 非敏感选项；凭据请交给 DSH。')
+            if not isinstance(value,dict) or set(value)-{'max_steps','persona','persona_file','tools','model_selection','direct_write','proactive'}:raise ValueError('只接受 Telos 非敏感选项；凭据请交给 DSH。')
             steps=value.get('max_steps',config.get('max_steps',24))
             if isinstance(steps,bool) or not isinstance(steps,int) or not 1<=steps<=100:raise ValueError('执行步骤应为 1 到 100 的整数。')
             candidate={**config,**value,'max_steps':steps}

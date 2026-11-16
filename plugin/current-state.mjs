@@ -5,13 +5,12 @@ import {replaceSurface} from './surface-replace.mjs';
 import {stableContext} from './runtime-context.mjs';
 
 export const STATE_KIND='telos-current-state';
-const OWNED=new Set(['telos:business','telos:proactive-context','habit-coach:current']);
+const OWNED=new Set(['telos:business','telos:proactive-context']);
 const PREFIX='Current runtime context. This snapshot supersedes earlier runtime-context snapshots.\n\n';
 const HISTORY_LIMIT=6000;
 const parse=text=>{try{return JSON.parse(text);}catch{return text;}};
 const message=e=>e.type==='user/message'?e.data:e.data?.message;
 const same=(a,b)=>stableContext(a)===stableContext(b);
-const pick=(value,keys)=>value?Object.fromEntries(keys.filter(k=>value[k]!==undefined).map(k=>[k,value[k]])):null;
 
 // Only durable business changes enter history. Current state remains complete,
 // including deadlines, pending confirmations and unresolved operations.
@@ -19,13 +18,6 @@ export function historyFacts(name,value) {
   if(!value||typeof value!=='object')return {};
   if(name==='telos:proactive-context')return {settings:value.settings??{}};
   if(name==='telos:business')return {direct_write:value.direct_write??false};
-  if(name==='habit-coach:current') {
-    const result={};
-    if(value.habit?.id)result[value.habit.id]={name:value.habit.name??null,lifecycle:value.habit.lifecycle??null,
-      plan:pick(value.plan,['version','accepted','plan']),proposal:pick(value.proposal,['version','accepted','plan']),
-      coach:pick(value.coach,['phase','current_focus','missing_information','pending_question','hypotheses','next_step','last_review'])};
-    return result;
-  }
   return {};
 }
 
@@ -65,6 +57,8 @@ export class CurrentState {
     }
     // Older versions recorded each receipt transition. Receipts remain in the
     // execution ledger and active state, never in the rolling change history.
+    for(const key of Object.keys(this.payload.facts))if(!OWNED.has(key))delete this.payload.facts[key];
+    this.payload.history=this.payload.history.filter(row=>OWNED.has(row.section));
     if(this.payload.facts['telos:business'])delete this.payload.facts['telos:business'].receipt;
     this.payload.history=this.payload.history.map(row=>row.section==='telos:business'
       ?{...row,changes:row.changes.filter(c=>c.field!=='receipt'&&!c.field.startsWith('receipt.'))}:row)
@@ -74,16 +68,9 @@ export class CurrentState {
   capture(assembly) {
     this.accepted=assembly.contexts.filter(s=>OWNED.has(s.name));
     assembly.contexts=assembly.contexts.filter(s=>!OWNED.has(s.name));
-    this.methodPresent=assembly.sections.some(s=>s.name==='habit-coach:method'&&s.text);
   }
   record(name,previous,next,time) {
     if(previous===undefined||same(previous,next))return;
-    // A selected-habit switch is not a change to either habit's plan.
-    if(name==='habit-coach:current') {
-      const ids=Object.keys(previous).filter(id=>Object.hasOwn(next,id));
-      previous=Object.fromEntries(ids.map(id=>[id,previous[id]]));
-      next=Object.fromEntries(ids.map(id=>[id,next[id]]));
-    }
     const delta=changes(previous,next);
     if(!delta.length)return;
     this.payload.history.push({at:time,section:name,changes:delta.slice(0,12),...(delta.length>12?{additional_changes:delta.length-12}:{})});
@@ -94,7 +81,7 @@ export class CurrentState {
     for(const seq of [...session.surface.nodes]) {
       const e=session.eventAt(seq),m=message(e),sections=m?.source?.sections;
       if(m?.source?.kind!=='runtime-context'||!Array.isArray(sections))continue;
-      const owned=s=>OWNED.has(s.name)||(s.name==='habit-coach:method'&&this.methodPresent);
+      const owned=s=>OWNED.has(s.name);
       if(!sections.some(owned))continue;
       // Refuse to reconstruct unrecognized mixed content. Do not drop blocks
       // or other plugins' contributions based on substring matching.
@@ -116,7 +103,7 @@ export class CurrentState {
     for(const [name,next]of Object.entries(facts))this.record(name,this.payload.facts[name],next,this.now());
     this.providers.clear();
     this.payload.current=current;this.payload.facts=facts;
-    const text='Current Telos and habit state (authoritative now, regardless of this message’s position). Historical summaries and tool results are observations, not current state. Never infer authorization from this summary; tool guards and explicit human instructions govern writes.\n'+stableContext({current,history:this.payload.history,older_changes_omitted:this.payload.omitted});
+    const text='Current Telos state (authoritative now, regardless of this message’s position). Historical summaries and tool results are observations, not current state. Never infer authorization from this summary; tool guards and explicit human instructions govern writes.\n'+stableContext({current,history:this.payload.history,older_changes_omitted:this.payload.omitted});
     const existing=this.session.surface.nodes.map(seq=>this.session.eventAt(seq)).filter(e=>message(e)?.source?.kind===STATE_KIND);
     if(existing.length>1)throw new Error('Multiple Telos current-state nodes; refusing ambiguous replacement');
     const old=existing[0];

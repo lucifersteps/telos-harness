@@ -7,7 +7,7 @@ import pytest
 
 from proactive import ProactiveStore, defaults, validate
 from settings import read_config, write_config
-from support import Harness, activity_read, call, draft
+from support import Harness, call, draft
 from test_schedule import wait, value
 from test_history import results, tool_text
 
@@ -18,7 +18,7 @@ def stamp(text):
 
 def configured(root, *, now=None, heartbeat=True, fixed=True):
     config=read_config(root); proactive=defaults()
-    proactive.update(enabled=True,session='wechat-test')
+    proactive.update(enabled=True,session='wechat-test',notification_mode='always')
     proactive['heartbeat']['enabled']=heartbeat
     for item in proactive['fixed']:item['enabled']=fixed
     config['proactive']=proactive;write_config(root,config)
@@ -47,11 +47,10 @@ def test_required_heartbeat_instructions_reach_model_across_tools_and_restart(tm
             with store.db() as db:
                 event=store._insert(db,h.session,revision,'heartbeat',time.time()+1,prompt)
             h.model.script=[call('read-goal',{'action':'query','kind':'reminder'}),
-                activity_read(),
                 call('required-notify',{'message':'已核对最新事项，本次没有新增进展证据。'},'notify_user'),'内部完成。']
             h.runtime=h.restart();await h.runtime.start()
             await wait(lambda:store.event(event,h.session)['state']=='sent')
-            await wait(lambda:len(h.model.requests)==5)
+            await wait(lambda:len(h.model.requests)==4)
             for request in h.model.requests[1:]:
                 current=states(request)
                 assert len(current)==1
@@ -73,7 +72,7 @@ def test_required_heartbeat_instructions_reach_model_across_tools_and_restart(tm
     asyncio.run(run())
 
 
-def test_mentor_context_survives_quiet_checks_and_restart(tmp_path):
+def test_contact_context_survives_quiet_checks_and_restart(tmp_path):
     now=stamp('2026-11-05T00:00:05+08:00')
     store=configured(tmp_path,now=lambda:now)
     _,revision,_=store.sync()
@@ -92,12 +91,12 @@ def test_mentor_context_survives_quiet_checks_and_restart(tmp_path):
     result=restored.context('wechat-test',['fixed','heartbeat','followup'])
     assert all(r.get('message')!='上午盘点得怎样？' for r in result['recent'])
     assert [r['message'] for r in result['recent_notifications']]==['上午盘点得怎样？']
-    assert {r['kind']:r['habit_reminder_allowed'] for r in result['events']}=={'fixed':True,'heartbeat':False,'followup':False}
+    assert all('habit_reminder_allowed' not in r and 'observation_window' not in r for r in result['events'])
     assert result['pending_checks'] and all(r['kind'] in ('fixed','followup') for r in result['pending_checks'])
     assert 'secret' not in json.dumps(result)
 
 
-def test_midnight_permission_uses_configured_timezone(tmp_path):
+def test_basic_contact_context_uses_configured_timezone(tmp_path):
     now=stamp('2026-11-05T00:00:00+08:00')
     store=configured(tmp_path,now=lambda:now)
     config=read_config(tmp_path);config['proactive']['timezone']='UTC';write_config(tmp_path,config)
@@ -105,7 +104,7 @@ def test_midnight_permission_uses_configured_timezone(tmp_path):
     with store.db() as db:
         key=store._insert(db,'wechat-test',revision,'fixed',now,'检查',state='running')
         db.execute('UPDATE proactive_events SET input_id=? WHERE id=?',('input',key))
-    assert store.context('wechat-test',['input'])['events'][0]['habit_reminder_allowed'] is False
+    assert store.context('wechat-test',['input'])['settings']['timezone']=='UTC'
 
 
 def test_exact_collision_only_and_restart_idempotency(tmp_path):
@@ -171,20 +170,19 @@ def test_native_followup_context_notify_once_and_silent_output(tmp_path):
         h=Harness(tmp_path,[])
         configured(tmp_path/'data',heartbeat=False,fixed=False)
         h.model.script=[lambda _:next_check('register'), '已登记。',call('query',{'action':'query','kind':'reminder'}),
-                        activity_read(),
                         call('notify',{'message':'该去买菜了。'},'notify_user'),'这段后台总结不应该发出去。']
         try:
             await h.submit('帮我稍后看看待办')
             record=value(h.model.requests[1]);assert record['status']=='registered'
             await wait(lambda:'该去买菜了。' in h.sent)
-            await wait(lambda:len(h.model.requests)==6)
+            await wait(lambda:len(h.model.requests)==5)
             assert h.sent==['已登记。','该去买菜了。']
             request=json.dumps(h.model.requests[2],ensure_ascii=False)
             assert '查询待办，决定是否联系' in request and 'proactive' in request
             assert not results(h.model.requests[3])[-1].get('is_error')
-            assert value(h.model.requests[5])['status']=='queued'
+            assert value(h.model.requests[4])['status']=='queued'
             await h.runtime.close();h.runtime=h.restart();await h.runtime.start();await asyncio.sleep(.4)
-            assert h.sent==['已登记。','该去买菜了。'] and len(h.model.requests)==6
+            assert h.sent==['已登记。','该去买菜了。'] and len(h.model.requests)==5
             assert h.runtime.proactive.event(record['event_id'],h.session)['state']=='sent'
         finally:await h.close()
     asyncio.run(run())
@@ -197,15 +195,14 @@ def test_native_quiet_readonly_guard_and_followup_after_delivery(tmp_path):
             time.sleep(2.5)  # Give the sender time to mark the current notification sent.
             return next_check('another',1)
         h.model.script=[lambda _:next_check('register'), '已登记。',call('write',draft()),
-            activity_read(),
             call('notify',{'message':'一次主动消息。'},'notify_user'),slow_followup,'内部完成。','暂时没有需要联系的内容。']
         try:
             await h.submit('稍后主动检查')
-            await wait(lambda:len(h.model.requests)==8)
+            await wait(lambda:len(h.model.requests)==7)
             await wait(lambda:any(e['state']=='quiet' for e in h.runtime.proactive.status()['recent']))
             assert not h.native.writes
             assert results(h.model.requests[3])[-1].get('is_error')
-            assert value(h.model.requests[6])['status']=='registered'
+            assert value(h.model.requests[5])['status']=='registered'
             assert h.sent==['已登记。','一次主动消息。']
         finally:await h.close()
     asyncio.run(run())
@@ -217,7 +214,7 @@ def test_native_two_close_checks_are_separate_turns(tmp_path):
         h.model.script=[lambda _:next_check('first',2),lambda _:next_check('second',2),'两次检查已登记。','第一次安静。','第二次安静。']
         try:
             await h.submit('登记两次相近检查')
-            await wait(lambda:len(h.model.requests)==5)
+            await wait(lambda:len(h.model.requests)==4)
             await wait(lambda:sum(e['state']=='quiet' for e in h.runtime.proactive.status()['recent'])==2)
             assert h.sent==['两次检查已登记。']
         finally:await h.close()
@@ -250,7 +247,7 @@ def test_native_overdue_unregistered_fixed_and_cancel_before_wakeup(tmp_path):
             store=h.runtime.proactive;_,revision,_=store.sync()
             with store.db() as db:
                 event=store._insert(db,h.session,revision,'fixed',time.time()-3,'FIXED_CUSTOM_PROMPT：查询日历后提醒我出门。')
-            h.model.script=[activity_read(),call('fixed',{'message':'记得出门。'},'notify_user'),'后台结束。'];h.runtime=h.restart();await h.runtime.start()
+            h.model.script=[call('fixed',{'message':'记得出门。'},'notify_user'),'后台结束。'];h.runtime=h.restart();await h.runtime.start()
             await wait(lambda:'记得出门。' in h.sent)
             assert 'FIXED_CUSTOM_PROMPT' in json.dumps(h.model.requests[1],ensure_ascii=False)
             assert h.runtime.proactive.event(event,h.session)['state']=='sent'
@@ -322,9 +319,8 @@ def test_native_exact_same_time_fixed_and_followup_both_execute(tmp_path):
             with store.db() as db:
                 first=store._insert(db,h.session,revision,'fixed',due,'固定提醒的内容')
                 second=store._insert(db,h.session,revision,'followup',due,'独立后续检查的内容')
-            h.model.script=[activity_read('read-first'),call('first',{'message':'第一条主动消息。'},'notify_user'),'内部完成1',
-                            call('missing-second',{'message':'上一轮查询不能代替本轮。'},'notify_user'),
-                            activity_read('read-second'),call('second',{'message':'第二条主动消息。'},'notify_user'),'内部完成2']
+            h.model.script=[call('first',{'message':'第一条主动消息。'},'notify_user'),'内部完成1',
+                            call('second',{'message':'第二条主动消息。'},'notify_user'),'内部完成2']
             h.runtime=h.restart();await h.runtime.start()
             await wait(lambda:len(h.sent)==3)
             assert h.sent==['收到。','第一条主动消息。','第二条主动消息。']
