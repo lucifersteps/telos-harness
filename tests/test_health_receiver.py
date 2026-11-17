@@ -17,7 +17,7 @@ import uuid
 import pytest
 
 ROOT=Path(__file__).resolve().parents[1]
-INTEGRATION=ROOT.parent/'pulse-relay-integration'
+INTEGRATION=Path(os.environ.get('TELOS_TEST_HEALTH_ROOT', ROOT.parent/'pulse-relay-integration'))
 SUPERVISOR=ROOT/'plugin/health-receiver.py'
 
 def wait_for(predicate,timeout=10):
@@ -34,6 +34,8 @@ def port_open(port):
 
 @pytest.fixture
 def receiver_root(tmp_path):
+    if not (INTEGRATION/'scripts/run_service.py').is_file():
+        pytest.skip('需要 TELOS_TEST_HEALTH_ROOT 指向健康接收端源码')
     root=tmp_path/'receiver'
     for directory in ['private','logs','backups','scripts','.venv/bin','data']:
         (root/directory).mkdir(parents=True)
