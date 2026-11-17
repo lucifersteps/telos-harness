@@ -2,7 +2,7 @@
 
 **当前分支：experimental（实验版）。** 在 [main 核心版](https://github.com/lucifersteps/telos-harness/tree/main) 基础上保留目标执行督促、可插拔策略、ActivityWatch/屏幕时间/健康查询、行为观察和健康接收端。稳定性与兼容修复两边共用；实验分支持续同步 main。
 
-分支拆分尚未创建新的正式 Release；现有 v0.5.2 标签与安装包仍为拆分前版本，包含实验功能。源码变更需要重新构建，不能通过重新下载 v0.5.2 获得。
+当前实验预发布版为 [0.6.1-experimental.1](https://github.com/lucifersteps/telos-harness/releases/tag/v0.6.1-experimental.1)。最新正式核心版仍为 [0.6.0](https://github.com/lucifersteps/telos-harness/releases/tag/v0.6.0)，两种版本沿用同一插件和数据目录，按需切换，不同时启动两个微信实例。
 
 **事务交给 Telos 打理，忙碌也能有条不紊。**
 
@@ -18,7 +18,7 @@
 
 ![Telos 六格漫画：从遗漏安排、反复尝试管理 App，到在微信里发送截图和语音，由 Telos 整理到 Apple 日历与提醒事项，事务虽多依然从容有序。](docs/assets/telos-story.png)
 
-**多一份从容，从 Telos 开始。** [下载安装包](https://github.com/lucifersteps/telos-harness/releases/tag/v0.5.2)，或按下方的[「让 AI 帮你安装」](#让-ai-帮你安装)开始配置。
+**多一份从容，从 Telos 开始。** [下载安装包](https://github.com/lucifersteps/telos-harness/releases/tag/v0.6.1-experimental.1)，或按下方的[「让 AI 帮你安装」](#让-ai-帮你安装)开始配置。
 
 [查看六宫格漫画原图](docs/assets/telos-story.png) · [查看宣传海报（含项目二维码）](docs/assets/telos-poster.png)
 
@@ -73,11 +73,13 @@ DeepSeek Harness（下文简称 DSH）支持桌面版和 CLI，两种方式使�
 
 安装包自带 Telos 所需的 Python 运行环境和 Apple 组件，无需安装 Python、Homebrew 或 Xcode。选用 Node/CLI 时，仍需要 DSH 对应的 Node.js 运行环境。
 
-**当前公开版本：0.5.2。** 从 [0.5.2 Release](https://github.com/lucifersteps/telos-harness/releases/tag/v0.5.2) 下载安装包与 SHA256 校验文件。不要把源码 ZIP 当作插件安装包。
+**当前实验预发布版：0.6.1-experimental.1。** 从 [0.6.1-experimental.1 Release](https://github.com/lucifersteps/telos-harness/releases/tag/v0.6.1-experimental.1) 下载 `.tgz` 与 SHA256 文件。GitHub 最新正式版本继续为 0.6.0 核心版；源码 ZIP 不能作为插件安装。
 
-**0.5.2 功能：** 整合可插拔主动消息策略、目标/计划/行为校验、统一健康活动查询及独立观察气泡；已有健康接收端可交由 Telos 管理启停。安装包为 `dist/telos-harness-0.5.2-macos-arm64.tgz`，同目录附 SHA256 文件。0.5.2 修复用户画像重复注入，并清理已完成且送达的工具历史、限制定时检查摘要和状态变更历史；未决操作继续保留。
+本包包含微信与 Apple、百度地图、DSH 原生图片/语音/文件/记忆/历史、用户定时任务、基础心跳与问候，以及目标督促、可插拔策略、ActivityWatch/屏幕时间/健康查询、独立行为观察与健康接收端管理。外部数据服务和授权仍需原有环境提供，安装包不会自动部署 ActivityWatch 或导入健康数据。
 
-0.5.2 已包含 DSH 桌面版 `0.2.2-rc.1` 的工具和定时接口适配；升级宿主前先升级插件。升级步骤及调度数据回退限制见[安装包说明](packaging/README.md#数据升级与确认)。
+包含 0.5.2 后续回归修复和与 0.6.0 相同的旗标兼容修复：旗标不可读时普通提醒事项快照和日历操作继续；旗标筛选或修改明确报告能力不足，不把未知当成 false。macOS 27.0.1 / DSH 0.2.2-rc.3 故障组合仍待实机验证。
+
+从 0.6.0 切回时保留配置、微信登录、历史和用户定时任务，恢复已保存的实验策略；取消旧核心托管检查并按实验配置重新生成。沿用与 0.6.0 完全一致的 Apple 组件，避免不必要的权限重置。安装后完整退出并重启 DSH。
 
 **0.4.19 更新：** 修复补充消息后旧预览不可确认、助手仍提示回复「1」的问题。旧卡暂停确认时保留草稿，回复“重新预览”即可重新校验并展示新卡，核对后再回复【1】确认；过期草稿也可恢复。复用现有草稿和确认流程，不新增状态机或数据库字段，保留文字投递恢复与图片分享能力。
 
@@ -87,11 +89,9 @@ DeepSeek Harness（下文简称 DSH）支持桌面版和 CLI，两种方式使�
 
 当前安装包使用 ad-hoc 签名，尚未完成 Developer ID 公证及另一台实体 Mac 的首次安装验证；如遇系统拦截，见 [排障指南](docs/troubleshooting.md#macos-blocked)。
 
-**0.5.2 验证限制：** 全量回归仍有未解决项，已复现 DSH 0.2.2 桌面会话压缩后历史回查的兼容错误；异常媒体后的预览续接等场景仍待核对。详见[发布验证记录](docs/development/release-0.5.2-validation.md)。
+**验证记录：** 共享修复见[回归记录](docs/development/regression-fixes-0.5.2.md)，本次最终实验包及核心版切换验证见[发布验证记录](docs/development/release-0.6.1-experimental.1-validation.md)。实验策略的模型判断仍可能有误，数据不足不代表没有行动。
 
-上述问题已在后续源码中修复，当前可运行回归为 Python 588 项通过、48 项因环境条件跳过，JavaScript 68 项通过，零失败。详见[修复验证记录](docs/development/regression-fixes-0.5.2.md)；这些修复尚未包含在上述公开的 0.5.2 安装包中。
-
-**插件市场安装来源：** 使用 [0.5.2 预构建安装包](https://github.com/lucifersteps/telos-harness/releases/download/v0.5.2/telos-harness-0.5.2-macos-arm64.tgz)，并核对同一 Release 的 SHA256 文件。仓库根目录的 `package.json` 声明正式插件元数据；源码不包含已编译的 Python 和 Apple 组件，不能直接用 `github:lucifersteps/telos-harness` 代替安装包。市场安装完成后，仍需完成模型配置、微信扫码和 Apple 授权。
+**插件市场安装来源：** 使用 [0.6.1-experimental.1 实验安装包](https://github.com/lucifersteps/telos-harness/releases/download/v0.6.1-experimental.1/telos-harness-0.6.1-experimental.1-macos-arm64.tgz)，并核对同一 Release 的 SHA256 文件。仓库根目录的 `package.json` 声明正式插件元数据；源码不包含已编译的 Python 和 Apple 组件，不能直接用 `github:lucifersteps/telos-harness` 代替安装包。市场安装完成后，仍需完成模型配置、微信扫码和 Apple 授权。
 
 ## 让 AI 帮你安装
 

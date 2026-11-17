@@ -33,7 +33,7 @@ bash run-validation.sh
 构建需要 Xcode Command Line Tools 和上述 Python 依赖：
 
 ```sh
-.venv/bin/python packaging/build.py --version 0.5.2
+.venv/bin/python packaging/build.py --version 0.6.1-experimental.1
 ```
 
 Apple 权限授予独立的「Telos Apple」，桌面版和 CLI 使用同一路径。本版为 ad-hoc 签名：组件内容更新后可能需要重新授权，本机已验证这一限制。正式分发可通过构建参数 `--sign-identity "Developer ID Application: …"` 使用稳定签名；当前尚未完成 Developer ID 签名、公证及另一台实体 Mac 验证。Telos 原创代码采用 MIT；第三方组件遵循各自许可，见根目录 LICENSE、THIRD_PARTY_NOTICES.md 与安装包 licenses/。
@@ -71,3 +71,5 @@ Apple 扩展能力的验证入口：`tests/business_tests/test_extended_apple.py
 普通文字投递由 `text_delivery.py` 持久保存分段计划、已确认位置与发送状态。每段发送前记录 sending；仅明确拒收允许从失败段重试，超时、取消及崩溃后结果未知时暂停自动重放。首次升级把旧版无分段回执的未完成回复标记为 legacy_unknown，原文保留。`tests/test_text_delivery.py` 与 `tests/test_text_delivery_hosts.py` 覆盖部分发送恢复、固定消息 ID、未知结果、并发去重和真实编译包重启；标题、摘要及完整 URL 在段落内合并发送。
 
 主动消息开发方案与配置说明见 [proactive.md](proactive.md)：30 分钟 heartbeat、可选固定提醒、Agent 登记后续检查，以及显式通知与静默输出的边界。
+
+实验版健康接收端回归可设置 `TELOS_TEST_HEALTH_ROOT` 指向已有接收端源码目录；测试只复用源码和启动脚本，在临时目录写入模拟健康数据，不读取生产数据库或令牌。未提供源码时相关测试明确跳过。
