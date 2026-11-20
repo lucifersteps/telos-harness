@@ -17,6 +17,7 @@ from business import Business, PREVIEW_CONTROLS, PREVIEW_REFRESH
 from personas import system_prompt
 from settings import read_config
 from telos.agent.tools.types import ToolInputError
+from telos.core.logging import ensure_log_file_handler
 from scheduled_delivery import ScheduledDelivery
 from image_delivery import share_image
 from proactive_channel import ProactiveChannel
@@ -27,6 +28,8 @@ ROOT=Path(__file__).resolve().parent
 class Channel(ProactiveChannel,ScheduledDelivery):
     def __init__(self,root,apple,adapter,*,harness_home=None,token=None,timeout=180,event_sink=None):
         self.root=Path(root);self.root.mkdir(parents=True,exist_ok=True)
+        self.tool_logger=logging.getLogger('telos.business.'+hashlib.sha256(str(self.root.resolve()).encode()).hexdigest()[:16])
+        ensure_log_file_handler(self.root/'logs'/'tool-errors.jsonl',logger=self.tool_logger)
         self.prompt=system_prompt(read_config(self.root))
         self.business=Business(self.root,apple,read_config(self.root));self.adapter=adapter
         self.delivery_locks={};self.loop=asyncio.get_running_loop();self.refs={};self.event_sink=event_sink
@@ -40,13 +43,20 @@ class Channel(ProactiveChannel,ScheduledDelivery):
             def do_POST(self):
                 if self.headers.get('Authorization')!='Bearer '+owner.token:
                     self.send_error(403);return
+                data={}
                 try:
                     data=json.loads(self.rfile.read(int(self.headers['Content-Length'])))
                     value=asyncio.run_coroutine_threadsafe(owner.route(self.path,data),owner.loop).result(timeout=timeout)
                     code=200;body=json.dumps(value,ensure_ascii=False).encode()
                 except Exception as error:
+                    owner.tool_logger.exception('Business endpoint failed',extra={
+                        'endpoint':self.path,'session':data.get('session') if isinstance(data,dict) else None,
+                        'tool':data.get('name') if isinstance(data,dict) else None,
+                        'error_code':getattr(error,'code',type(error).__name__)})
                     status='input_error' if isinstance(error,(ToolInputError,ValueError)) else 'tool_failed'
-                    code=400;body=json.dumps({'status':status,'reason':str(error),**({'execution_started':False} if status=='input_error' else {})},ensure_ascii=False).encode()
+                    code=400;body=json.dumps({'status':status,'reason':str(error),
+                        **({'error_code':error.code} if getattr(error,'code',None) else {}),
+                        **({'execution_started':False} if status=='input_error' else {})},ensure_ascii=False).encode()
                 try:
                     self.send_response(code);self.send_header('Content-Type','application/json');self.end_headers();self.wfile.write(body)
                 except (BrokenPipeError,ConnectionResetError):pass
@@ -194,3 +204,5 @@ class Channel(ProactiveChannel,ScheduledDelivery):
         await self.stop_schedule_sender()
         await asyncio.to_thread(self.server.shutdown)
         self.server.server_close()
+        for handler in self.tool_logger.handlers[:]:
+            handler.close();self.tool_logger.removeHandler(handler)

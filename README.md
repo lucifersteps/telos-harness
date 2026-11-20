@@ -2,7 +2,7 @@
 
 **当前分支：main（核心版）。** 保留微信与 Apple 提醒事项/日历、百度地图、DSH 原生图片/语音/文件/记忆/历史/通用工具、用户定时任务，以及基础心跳和主动问候。目标督促、行为/健康分析及可插拔策略在 [experimental 分支](https://github.com/lucifersteps/telos-harness/tree/experimental)。
 
-**0.6.0 是拆分后的核心版。** 已包含旗标不可读时的兼容降级及 0.5.2 后续回归修复。旧 v0.5.2 标签与安装包保留原状，仍包含实验功能。
+**0.6.1 是 main 核心版。** Apple 查询按来源和字段降级，保留可用信息并明确标记未知；包含附件兼容、会话上下文修复与错误日志。旧 v0.5.2 标签与安装包保留原状，仍包含实验功能。
 
 **事务交给 Telos 打理，忙碌也能有条不紊。**
 
@@ -18,7 +18,7 @@
 
 ![Telos 六格漫画：从遗漏安排、反复尝试管理 App，到在微信里发送截图和语音，由 Telos 整理到 Apple 日历与提醒事项，事务虽多依然从容有序。](docs/assets/telos-story.png)
 
-**多一份从容，从 Telos 开始。** [下载安装包](https://github.com/lucifersteps/telos-harness/releases/tag/v0.6.0)，或按下方的[「让 AI 帮你安装」](#让-ai-帮你安装)开始配置。
+**多一份从容，从 Telos 开始。** [下载安装包](https://github.com/lucifersteps/telos-harness/releases/tag/v0.6.1)，或按下方的[「让 AI 帮你安装」](#让-ai-帮你安装)开始配置。
 
 [查看六宫格漫画原图](docs/assets/telos-story.png) · [查看宣传海报（含项目二维码）](docs/assets/telos-poster.png)
 
@@ -73,7 +73,9 @@ DeepSeek Harness（下文简称 DSH）支持桌面版和 CLI，两种方式使�
 
 安装包自带 Telos 所需的 Python 运行环境和 Apple 组件，无需安装 Python、Homebrew 或 Xcode。选用 Node/CLI 时，仍需要 DSH 对应的 Node.js 运行环境。
 
-**当前公开版本：0.6.0。** 从 [0.6.0 Release](https://github.com/lucifersteps/telos-harness/releases/tag/v0.6.0) 下载安装包与 SHA256 校验文件。不要把源码 ZIP 当作插件安装包。
+**当前公开版本：0.6.1。** 从 [0.6.1 Release](https://github.com/lucifersteps/telos-harness/releases/tag/v0.6.1) 下载安装包与 SHA256 校验文件。不要把源码 ZIP 当作插件安装包。
+
+**0.6.1 更新：** 日历查询不再依赖提醒事项私有接口。标签、提前提醒、父子关系、分区、附件等字段不可读时仍返回其他可用字段；混合查询缺少来源时明确标记部分结果，完整总数未知，不冒充空清单。依赖未知状态的筛选和写入明确拒绝；新增 `logs/tool-errors.jsonl`。更新后完全退出并重启 DSH。详见[0.6.1 发布验证](docs/development/release-0.6.1-validation.md)。
 
 **0.6.0 更新：** 提醒事项旗标不可读时，返回未知状态，不再阻断普通提醒事项快照和日历操作；旗标可读的系统继续支持读写。依赖旗标的筛选或修改会明确报告能力不足，避免把未知当成“未加旗标”。保留微信、Apple、百度地图、DSH 原生能力、用户定时任务、基础心跳和主动问候；目标督促与行为健康分析移至 experimental。
 
@@ -89,9 +91,9 @@ DeepSeek Harness（下文简称 DSH）支持桌面版和 CLI，两种方式使�
 
 当前安装包使用 ad-hoc 签名，尚未完成 Developer ID 公证及另一台实体 Mac 的首次安装验证；如遇系统拦截，见 [排障指南](docs/troubleshooting.md#macos-blocked)。
 
-**验证记录：** 核心拆分回归合计 Python 554 项通过、50 项因环境条件跳过，JavaScript 43 项通过。最终 0.6.0 安装包的构建、升级与旗标回归结果见[发布验证记录](docs/development/release-0.6.0-validation.md)。历史 0.5.2 的问题及修复记录仍保留供查阅。
+**验证记录：** 0.6.1 完整 Python 回归 594 项通过、50 项因环境条件跳过；最终包查询降级专项 2 项通过，JavaScript 43 项通过。构建、真实升级及实机验证范围见[0.6.1 发布验证记录](docs/development/release-0.6.1-validation.md)。历史 [0.6.0 验证记录](docs/development/release-0.6.0-validation.md)仍保留供查阅。
 
-**插件市场安装来源：** 使用 [0.6.0 预构建安装包](https://github.com/lucifersteps/telos-harness/releases/download/v0.6.0/telos-harness-0.6.0-macos-arm64.tgz)，并核对同一 Release 的 SHA256 文件。仓库根目录的 `package.json` 声明正式插件元数据；源码不包含已编译的 Python 和 Apple 组件，不能直接用 `github:lucifersteps/telos-harness` 代替安装包。市场安装完成后，仍需完成模型配置、微信扫码和 Apple 授权。
+**插件市场安装来源：** 使用 [0.6.1 预构建安装包](https://github.com/lucifersteps/telos-harness/releases/download/v0.6.1/telos-harness-0.6.1-macos-arm64.tgz)，并核对同一 Release 的 SHA256 文件。仓库根目录的 `package.json` 声明正式插件元数据；源码不包含已编译的 Python 和 Apple 组件，不能直接用 `github:lucifersteps/telos-harness` 代替安装包。市场安装完成后，仍需完成模型配置、微信扫码和 Apple 授权。
 
 ## 让 AI 帮你安装
 

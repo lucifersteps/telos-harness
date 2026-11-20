@@ -144,7 +144,7 @@ class Business:
                 return await self._execute(session,cid,name,args,map_token=map_token)
         except (ToolInputError,ValueError) as error:
             existing=self.lookup(session,cid)
-            if name=='personalPlan' and isinstance(args,dict) and args.get('action') in {'create','update','delete','batch','revise'} and not (existing and existing.result.get('direct')):
+            if session in self.active and name=='personalPlan' and isinstance(args,dict) and args.get('action') in {'create','update','delete','batch','revise'} and not (existing and existing.result.get('direct')):
                 self.record_draft(session,cid,{k:v for k,v in args.items() if k not in {'request_mode','require_confirmation'}},
                                   {'status':'input_error','execution_started':False,'reason':str(error)})
             raise
@@ -158,7 +158,12 @@ class Business:
         error=validate_json_schema(tool.parameters,args)
         if error:raise ToolInputError(error)
         args=dict(args);mode=args.pop('request_mode','new');require_confirmation=args.pop('require_confirmation',False)
-        current=self.active[session]
+        current=self.active.get(session)
+        read_only=name=='personalPlan' and args.get('action') in {'query','detail'}
+        if current is None and not read_only:
+            raise ToolInputError('当前会话尚未建立本轮业务上下文；请从微信发送新消息后再执行。此次未执行写入。')
+        # Restored/native read calls do not need a human approval or write identity.
+        current=current or {'key':''}
         context=ToolInvocationContext(session_id=session,turn_id=current['key'],tool_call_id=cid,tool_name=name)
         pending=self.pending(session)
         write=name=='personalPlan' and args.get('action') not in {'query','detail'}

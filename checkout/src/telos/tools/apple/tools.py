@@ -211,6 +211,9 @@ def create_apple_tool(backend: str, *, data_dir: Path, options: dict[str, Any], 
                 raise AppleNativeError("对象已被修改，请重新查询并确认。", code="conflict")
         fields = args.get("fields", {})
         current = preview.get("current", {})
+        from telos.tools.apple.features import require_write_fields
+        if action != 'create':
+            require_write_fields(args['kind'], action, fields, current)
         validate_recurrence_scope(args["kind"], action, current, fields, args.get("recurrence_scope"))
         if args["kind"] == "reminder" and "due" in fields and not fields["due"] and current.get("recurring") and not ("recurrence" in fields and fields["recurrence"] is None):
             raise ValueError("取消到期日期前须同时取消重复规则。")
@@ -295,6 +298,8 @@ def create_apple_tool(backend: str, *, data_dir: Path, options: dict[str, Any], 
         for field, kind in [("parent_id","reminder"),("section_id","section")]:
             if approved_args["fields"].get(field):
                 reference = await asyncio.to_thread(service.detail,kind,approved_args["fields"][field])
+                if field == 'parent_id':
+                    require_write_fields('reminder', 'update', {'parent_id': approved_args['fields'][field]}, reference)
                 references[field] = {k:v for k,v in reference.items() if k!="revision"}
                 preview["summary"] += "\n目标" + ("父任务" if field=="parent_id" else "分区") + "：" + reference["title"]
         approved_args["expected_references"] = references

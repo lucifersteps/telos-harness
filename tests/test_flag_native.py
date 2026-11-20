@@ -22,12 +22,14 @@ def swift_function(source, signature):
 def test_native_flag_getters_unknown_state_and_write_guard(tmp_path):
     source = (Path(__file__).parents[1] / "checkout/src/telos/connectors/apple/personal_helper.swift").read_text()
     functions = "\n".join(swift_function(source, name) for name in (
-        "func remValue(", "func remObject(", "func reminderFlag(", "func requireReadableReminderFlag("))
+        "func remValue(", "func remObject(", "func reminderFlag(", "func requireReadableReminderFlag(",
+        "func optionalFields(", "func mergeReadStates("))
     state = swift_function(source, "func state(_ id: String)")
     program = r'''
 import Foundation
 import ObjectiveC
 struct Failure: Error { let code: String; let message: String }
+let reminderPrivateFields = ["flagged", "urgent", "attachments", "tags", "early_reminder", "early_reminder_minutes"]
 @objc class NumericFlag: NSObject { @objc dynamic var flagged: Int = 0 }
 @objc class BooleanFlag: NSObject { @objc dynamic var isFlagged: Bool = false }
 @objc class InvalidFlag: NSObject { @objc dynamic var flagged: String = "unknown" }
@@ -69,10 +71,10 @@ for flag in [false, true] {
         try requireReadableReminderFlag(reminder)
     }
 }
-do {
-    _ = try TestAlerts(object: Reminder(nil), rows: [[:], [:]]).state("test")
-    fatalError("旗标降级不应吞掉其他字段错误")
-} catch let error as Failure { assert(error.code == "read_failed") }
+let partial = try TestAlerts(object: Reminder(nil), rows: [[:], [:]]).state("test")
+assert(partial["early_reminder"] is NSNull)
+assert((partial["unavailable_fields"] as? [String])?.contains("early_reminder") == true)
+assert(partial["tags"] as? [String] == ["工作"])
 print("flag compatibility passed")
 '''
     swift = tmp_path / "main.swift"

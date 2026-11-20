@@ -15,6 +15,11 @@ DEFAULTS = {'notes':'', 'url':'', 'location':'', 'due':'', 'completed':False,
 def inverse_fields(action, kind, fields, current=None):
     """None means confirmation required; {} means a new object can be deleted."""
     current = current or {}
+    if current:
+        from telos.tools.apple.features import unavailable_fields
+        # A direct receipt promises a safe inverse, including a later delete.
+        if unavailable_fields(current) & {'parent_id', 'subtask_ids'}:
+            return None
     if action not in {'create','update'} or kind not in FIELDS or not fields or set(fields)-FIELDS[kind]:
         return None
     if current.get('recurring') or current.get('recurrence_rules') or current.get('attendees'):

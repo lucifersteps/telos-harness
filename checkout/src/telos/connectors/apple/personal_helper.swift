@@ -67,9 +67,14 @@ func permissionStatus() -> [String: Any] {
      "application": Bundle.main.bundleIdentifier ?? "", "pid": ProcessInfo.processInfo.processIdentifier]
 }
 
-func requireAccess() throws {
-    if !permitted(.event) || !permitted(.reminder) {
-        throw Failure(code: "permission_denied", message: "请先为 Telos Apple 授权日历和提醒事项；已拒绝时，请在系统设置 → 隐私与安全性中修改。")
+func requireAccess(_ request: [String: Any]) throws {
+    let kind = text(request["kind"])
+    let entities: [EKEntityType] = ["event", "event_calendar"].contains(kind) ? [.event]
+        : ["reminder", "list", "group", "section"].contains(kind) ? [.reminder] : [.event, .reminder]
+    let missing = entities.filter { !permitted($0) }
+    if !missing.isEmpty {
+        let names = missing.map { ($0 == .event ? "日历" : "提醒事项") + "（" + permissionName($0) + "）" }.joined(separator: "、")
+        throw Failure(code: "permission_denied", message: "请为 Telos Apple 授权" + names + "；已拒绝时，请在系统设置 → 隐私与安全性中修改。")
     }
 }
 
@@ -119,7 +124,10 @@ func reminderPayload(_ reminder: EKReminder) throws -> [String: Any] {
     result["priority"] = reminder.priority
     result["alarms"] = alarmPayload(reminder)
     result["location"] = reminderLocation(reminder)
-    result.merge(try PersonalReminderAlerts().state(reminder.calendarItemIdentifier)) { _, new in new }
+    let privateState = optionalFields(reminderPrivateFields) {
+        try PersonalReminderAlerts().state(reminder.calendarItemIdentifier)
+    }
+    result.merge(privateState) { _, new in new }
     if let components = reminder.dueDateComponents {
         if components.hour == nil {
             result["due"] = String(format: "%04d-%02d-%02d", components.year ?? 0, components.month ?? 0, components.day ?? 0)
@@ -149,6 +157,7 @@ func eventPayload(_ event: EKEvent) -> [String: Any] {
         return Int(value)
     }.sorted()
     result["travel_time_minutes"] = travelTime(event) as Any? ?? NSNull()
+    result["unavailable_fields"] = result["travel_time_minutes"] is NSNull ? ["travel_time_minutes"] : []
     result["availability"] = [0:"busy",1:"free",2:"tentative",3:"unavailable"][event.availability.rawValue] ?? "not_supported"
     result["event_status"] = event.status.rawValue
     result["attendees"] = (event.attendees ?? []).map { ["name":$0.name ?? "", "url":$0.url.absoluteString,"reply_status":$0.participantStatus.rawValue] }.sorted { text($0["url"]) < text($1["url"]) }
@@ -432,26 +441,79 @@ func fetchEvents(_ request: [String: Any]) throws -> [EKEvent] {
 }
 
 func snapshot(_ request: [String: Any]) throws -> [String: Any] {
-    let reminders = try fetchReminders(request).map { try reminderPayload($0) }
-    let events = try fetchEvents(request).map { eventPayload($0) }
-    let calendars = try selectedCalendars(request, entity: .reminder).map { calendarPayload($0, kind: "reminder") }
-        + selectedCalendars(request, entity: .event).map { calendarPayload($0, kind: "event") }
-    var result: [String: Any] = ["calendars": calendars, "items": reminders + events,
-            "start": text(request["start"]), "end": text(request["end"])]
-    do {
-        let containers = try PersonalReminderContainers().snapshot(request)
-        result.merge(containers) { _, new in new }
-        var capabilities=containers["container_capabilities"] as? [String:Any] ?? [:]
-        var extended=try eventCalendarRows(request)
-        do { extended += try sectionRows(request);capabilities["sections"]=true }
-        catch { capabilities["sections"]=false;capabilities["section_error"]=String(describing:error) }
-        result["containers"] = (containers["containers"] as? [[String:Any]] ?? []) + extended
-        result["container_capabilities"] = capabilities
-    } catch {
-        result["containers"] = []
-        result["container_capabilities"] = ["groups": false, "icons": false, "error": String(describing: error)]
+    let kind = text(request["kind"])
+    let calendarOnly = ["event", "event_calendar"].contains(kind)
+    var items: [[String: Any]] = [], calendars: [[String: Any]] = [], containers: [[String: Any]] = []
+    var errors: [String: Any] = [:], capabilities: [String: Any] = [:]
+    func capture(_ source: String, _ read: () throws -> Void) throws {
+        do { try read() }
+        catch let error as Failure {
+            if ["invalid_date", "invalid_range", "invalid_kind", "invalid_field"].contains(error.code) { throw error }
+            errors[source] = ["code": error.code, "reason": error.message]
+        }
+        catch { errors[source] = ["code": "read_failed", "reason": String(describing: error)] }
     }
-    return result
+    if kind.isEmpty || calendarOnly {
+        try capture("event") {
+            try requireAccess(["kind": "event"])
+            let selected = try selectedCalendars(request, entity: .event).map { calendarPayload($0, kind: "event") }
+            let events = kind == "event_calendar" ? [] : try fetchEvents(request).map { eventPayload($0) }
+            calendars += selected; items += events
+        }
+        if errors["event"] == nil {
+            try capture("event_calendar") { containers += try eventCalendarRows(request) }
+            capabilities["default_event_account_id"] = store.defaultCalendarForNewEvents?.source.sourceIdentifier ?? ""
+        }
+    }
+    if !calendarOnly {
+        try capture("reminder") {
+            try requireAccess(["kind": "reminder"])
+            let selected = try selectedCalendars(request, entity: .reminder).map { calendarPayload($0, kind: "reminder") }
+            let reminders = kind.isEmpty || kind == "reminder" ? try fetchReminders(request).map { try reminderPayload($0) } : []
+            calendars += selected; items += reminders
+        }
+        // Container reads are independent of reminder item payloads and of each other.
+        try capture("list") {
+            try requireAccess(["kind": "list"])
+            let basic = try selectedCalendars(request, entity: .reminder)
+            do {
+                let result = try PersonalReminderContainers().snapshot(request)
+                containers += result["containers"] as? [[String: Any]] ?? []
+                capabilities.merge(result["container_capabilities"] as? [String: Any] ?? [:]) { _, new in new }
+                capabilities["lists"] = true
+            } catch {
+                containers += basic.map { calendar in
+                    ["id": calendar.calendarIdentifier, "kind": "list", "title": calendar.title,
+                     "writable": calendar.allowsContentModifications,
+                     "account_id": NSNull(), "group_id": NSNull(), "emoji": NSNull(), "symbol": NSNull(), "item_count": NSNull(),
+                     "unavailable_fields": ["account_id", "group_id", "emoji", "symbol", "item_count"]]
+                }
+                capabilities["lists"] = true; capabilities["groups"] = false; capabilities["icons"] = false
+                errors["group"] = ["code": "read_failed", "reason": "群组和清单扩展属性不可读；仅返回基础清单。"]
+            }
+        }
+        try capture("section") {
+            try requireAccess(["kind": "section"])
+            containers += try sectionRows(request); capabilities["sections"] = true
+        }
+        if errors["section"] != nil { capabilities["sections"] = false }
+    }
+    if let error = errors["event"] { errors["event_calendar"] = error }
+    if let error = errors["list"] { errors["group"] = error }
+    return ["calendars": calendars, "items": items, "containers": containers,
+            "container_capabilities": capabilities, "source_errors": errors,
+            "start": text(request["start"]), "end": text(request["end"])]
+}
+
+func readContainerDetail(_ request: [String: Any]) throws -> [String: Any] {
+    let result = try snapshot(request), kind = text(request["kind"])
+    if let error = (result["source_errors"] as? [String: [String: Any]])?[kind] {
+        throw Failure(code: text(error["code"]), message: text(error["reason"]))
+    }
+    guard let row = (result["containers"] as? [[String: Any]])?.first(where: {
+        text($0["kind"]) == kind && text($0["id"]) == text(request["id"])
+    }) else { throw Failure(code: "not_found", message: "容器不存在或不在查询范围。") }
+    return row
 }
 
 func target(_ request: [String: Any], kind: String, id: String) throws -> EKCalendarItem {
@@ -582,6 +644,7 @@ func write(_ request: [String: Any], action: String) throws -> [String: Any] {
         item = kind == "reminder" ? EKReminder(eventStore: store) : EKEvent(eventStore: store)
     } else {
         item = try target(request, kind: kind, id: text(request["id"]))
+        try requireReadableWriteFields(try payload(item), fields: fields, action: action)
         let expected = request["expected"] as? [String: Any] ?? [:]
         if try expected.isEmpty || !NSDictionary(dictionary: comparableAppleState(payload(item))).isEqual(to: comparableAppleState(expected)) {
             throw Failure(code: "conflict", message: "事项已被修改，操作未执行。请重新查询并确认。")
@@ -697,7 +760,10 @@ struct PersonalReminderAlerts {
         guard reminder.responds(to: NSSelectorFromString("dueDateDeltaAlertsData")) else {
             throw Failure(code: "unsupported_private_feature", message: "系统未提供提前提醒读取接口。")
         }
-        guard let data = remValue(reminder, "dueDateDeltaAlertsData") as? Data else { return [] }
+        guard let value = remValue(reminder, "dueDateDeltaAlertsData") else { return [] }
+        guard let data = value as? Data else {
+            throw Failure(code: "read_failed", message: "无法识别提前提醒数据类型。")
+        }
         guard let root = try JSONSerialization.jsonObject(with: data) as? [String: Any],
               let rows = root["dueDateDeltaAlerts"] as? [[String: Any]],
               rows.allSatisfy({ $0["identifier"] is String && $0["dueDateDeltaUnit"] is Int && $0["dueDateDeltaCount"] is Int }) else {
@@ -753,19 +819,22 @@ struct PersonalReminderAlerts {
         let flagState: [String: Any] = ["flagged": flag?.boolValue as Any? ?? NSNull(),
                                       "flagged_supported": flag != nil]
         let extra = try extendedReminderState(object)
-        let names = try tags(object)
-        let rows = try alerts(object)
-        guard rows.count <= 1 else {
-            throw Failure(code: "read_failed", message: "事项包含多个原生提前提醒，需要先在 Apple 中核实。")
+        let tagState = optionalFields(["tags"]) { ["tags": try tags(object)] }
+        let earlyState = optionalFields(["early_reminder", "early_reminder_minutes"]) {
+            let rows = try alerts(object)
+            guard rows.count <= 1 else {
+                throw Failure(code: "read_failed", message: "事项包含多个原生提前提醒，不能用单个提前提醒表示。")
+            }
+            guard let alert = rows.first else {
+                return ["early_reminder_minutes": NSNull(), "early_reminder": NSNull()]
+            }
+            guard let unit = alert["dueDateDeltaUnit"] as? Int, let count = alert["dueDateDeltaCount"] as? Int,
+                  let factor = [0: 1, 1: 60, 2: 1440, 3: 10080][unit], count < 0, count >= -(525600 / factor) else {
+                throw Failure(code: "read_failed", message: "无法识别提前提醒间隔。")
+            }
+            return ["early_reminder_minutes": -count * factor, "early_reminder": alert]
         }
-        guard let alert = rows.first else {
-            return extra.merging(flagState){_,n in n}.merging(["tags":names, "early_reminder_minutes": NSNull(), "early_reminder": NSNull()]){_,n in n}
-        }
-        let unit = alert["dueDateDeltaUnit"] as! Int
-        let count = alert["dueDateDeltaCount"] as! Int
-        let factors = [0: 1, 1: 60, 2: 1440, 3: 10080]
-        let minutes = factors[unit].map { -count * $0 }
-        return extra.merging(flagState){_,n in n}.merging(["tags":names, "early_reminder_minutes": minutes as Any? ?? NSNull(), "early_reminder": alert]){_,n in n}
+        return mergeReadStates([extra, flagState, tagState, earlyState])
     }
 
     static func interval(_ minutes: Int) throws -> NSObject {
@@ -795,6 +864,7 @@ struct PersonalReminderAlerts {
         } else {
             let existing = try reminder(item.calendarItemIdentifier)
             if fields["flagged"] != nil { try requireReadableReminderFlag(existing) }
+            if fields["attachments"] != nil { try requireReadableReminderAttachments(existing) }
             change = try remCall(request, "updateReminder:", [existing])
         }
         // 只修改本次明确提交的字段；保留位置提醒、附件和其它原生属性。
@@ -889,7 +959,8 @@ struct PersonalReminderAlerts {
                 guard (result["early_reminder_minutes"] as? Int) == minutes else {
                     throw Failure(code: "read_failed", message: "提前提醒保存后的值不一致。")
                 }
-            } else if early != nil && !(result["early_reminder"] is NSNull) {
+            } else if early != nil && (!(result["early_reminder"] is NSNull) ||
+                       (result["unavailable_fields"] as? [String] ?? []).contains("early_reminder")) {
                 throw Failure(code: "read_failed", message: "提前提醒未成功清除。")
             }
             return ["item": result]
@@ -1070,7 +1141,7 @@ final class PersonalReminderContainers {
         let defaultAccountID = lists.first { text($0["id"]) == store.defaultCalendarForNewReminders()?.calendarIdentifier }?["account_id"] ?? ""
         return ["containers": lists + groups, "container_capabilities": ["groups": true, "icons": true,
             "colors": reminderColors.mapValues { colorHex($0) }, "symbols": reminderSymbols, "accounts": accountRows,
-            "default_account_id": defaultAccountID, "default_event_account_id":store.defaultCalendarForNewEvents?.source.sourceIdentifier ?? "", "restricted_scope": restricted]]
+            "default_account_id": defaultAccountID, "restricted_scope": restricted]]
     }
     func detail(_ request: [String: Any]) throws -> [String: Any] {
         let snapshot = try snapshot(request)
@@ -1364,7 +1435,8 @@ func sectionRows(_ request:[String:Any]) throws -> [[String:Any]] {
             let id = remID(section)
             result.append(["id":id,"kind":"section","title":text(remValue(section,"displayName")),
                 "calendar_id":calendar.calendarIdentifier,"writable":calendar.allowsContentModifications,
-                "member_ids":memberships.map{$0.filter { $0.value==id.uppercased() }.keys.sorted()} as Any? ?? NSNull(), "membership_readable":memberships != nil])
+                "member_ids":memberships.map{$0.filter { $0.value==id.uppercased() }.keys.sorted()} as Any? ?? NSNull(),
+                "membership_readable":memberships != nil, "unavailable_fields":memberships == nil ? ["member_ids"] : []])
         }
     }
     return result.sorted { text($0["id"])<text($1["id"]) }
@@ -1460,21 +1532,89 @@ func attachmentRows(_ object:NSObject) throws -> [[String:Any]] {
         return ["id":remID(a),"type":url == nil ? "image" : "url","file_name":file?.lastPathComponent ?? "", "url":url?.absoluteString ?? ""]
     }.sorted {text($0["id"])<text($1["id"])}
 }
-func extendedReminderState(_ object:NSObject) throws -> [String:Any] {
-    let context=remObject(object,"subtaskContext")
-    let children = try context.map { try remFetch($0,"fetchRemindersWithError:") as? [NSObject] ?? [] } ?? []
-    let completed = try context.map { try remFetch($0,"fetchObjectIDsOfCompletedSubtasksWithError:") as? [NSObject] ?? [] } ?? []
-    let urgent=remValue(remObject(object,"urgentAlarmContext"),"isUrgentStateEnabledForCurrentUser") as? NSNumber
-    guard let list=remObject(object,"list") else {
-        throw Failure(code:"read_failed",message:"无法读取父子关系或紧急状态。")
+func reminderAttachmentState(_ object: NSObject) -> [String: Any] {
+    do { return ["attachments": try attachmentRows(object), "attachments_supported": true] }
+    catch { return ["attachments": NSNull(), "attachments_supported": false] }
+}
+func requireReadableReminderAttachments(_ object: NSObject) throws {
+    guard reminderAttachmentState(object)["attachments_supported"] as? Bool == true else {
+        throw Failure(code: "unsupported_private_feature", message: "当前事项的附件不可读，不能替换或清空附件。")
     }
-    var sectionID:Any=NSNull(), sectionError=""
-    do { let memberships=try sectionMemberships(list); sectionID=memberships[remID(object).uppercased()] ?? memberships[remID(remObject(object,"parentReminder")).uppercased()] ?? "" }
-    catch { sectionError=String(describing:error) }
-    return ["parent_id":remID(remObject(object,"parentReminder")),
-        "subtask_ids":Set(children.map{remID($0)}+completed.map{remID($0)}).sorted(),
-        "section_id":sectionID, "section_read_error":sectionError,
-        "urgent":urgent?.boolValue as Any? ?? NSNull(), "urgent_supported":urgent != nil,"attachments":try attachmentRows(object)]
+}
+let reminderPrivateFields = ["flagged", "tags", "early_reminder", "early_reminder_minutes",
+                             "parent_id", "subtask_ids", "section_id", "urgent", "attachments"]
+
+func optionalFields(_ fields: [String], read: () throws -> [String: Any]) -> [String: Any] {
+    do { return try read() }
+    catch {
+        var result: [String: Any] = Dictionary(uniqueKeysWithValues: fields.map { ($0, NSNull()) })
+        for field in fields { result[field + "_supported"] = false }
+        result["unavailable_fields"] = fields.sorted()
+        return result
+    }
+}
+
+func mergeReadStates(_ states: [[String: Any]]) -> [String: Any] {
+    var result: [String: Any] = [:], missing = Set<String>()
+    for state in states {
+        missing.formUnion(state["unavailable_fields"] as? [String] ?? [])
+        result.merge(state) { _, new in new }
+    }
+    for field in reminderPrivateFields where result[field + "_supported"] as? Bool == false { missing.insert(field) }
+    result["unavailable_fields"] = missing.sorted()
+    return result
+}
+
+func requireReadableWriteFields(_ current: [String: Any], fields: [String: Any], action: String) throws {
+    var needed = Set(fields.keys), missing = Set(current["unavailable_fields"] as? [String] ?? [])
+    for field in ["flagged", "urgent", "attachments", "tags", "parent_id", "subtask_ids", "section_id", "travel_time_minutes"] {
+        if current[field] is NSNull || current[field + "_supported"] as? Bool == false { missing.insert(field) }
+    }
+    if text(current["kind"]) == "reminder" {
+        if action == "delete" || !Set(fields.keys).isDisjoint(with: ["parent_id", "calendar_id", "completed"]) {
+            needed.formUnion(["parent_id", "subtask_ids"])
+        }
+        if fields["section_id"] != nil || fields["calendar_id"] != nil { needed.formUnion(["parent_id", "section_id"]) }
+        if fields["due"] != nil { needed.formUnion(["urgent", "early_reminder", "early_reminder_minutes"]) }
+    }
+    let unknown = needed.intersection(missing)
+    guard unknown.isEmpty else {
+        throw Failure(code: "unsupported_private_feature", message: "以下字段不可读，不能安全执行此修改：" + unknown.sorted().joined(separator: "、"))
+    }
+}
+
+func extendedReminderState(_ object:NSObject) throws -> [String:Any] {
+    let parent = optionalFields(["parent_id"]) {
+        guard object.responds(to: NSSelectorFromString("parentReminder")) else {
+            throw Failure(code:"read_failed",message:"无法读取父任务。")
+        }
+        let raw = remValue(object,"parentReminder")
+        guard raw == nil || raw is NSObject else { throw Failure(code:"read_failed",message:"父任务格式不可识别。") }
+        let value = raw as? NSObject
+        if value != nil && remID(value).isEmpty { throw Failure(code:"read_failed",message:"父任务编号不可读。") }
+        return ["parent_id": remID(value)]
+    }
+    let children = optionalFields(["subtask_ids"]) {
+        let context = try remCall(object,"subtaskContext")
+        guard let children = try remFetch(context,"fetchRemindersWithError:") as? [NSObject],
+              let completed = try remFetch(context,"fetchObjectIDsOfCompletedSubtasksWithError:") as? [NSObject] else {
+            throw Failure(code:"read_failed",message:"无法读取子任务。")
+        }
+        let identifiers = (children + completed).map { remID($0) }
+        guard !identifiers.contains("") else { throw Failure(code:"read_failed",message:"子任务编号不可读。") }
+        return ["subtask_ids": Set(identifiers).sorted()]
+    }
+    let section = optionalFields(["section_id"]) {
+        guard let list = remObject(object,"list"), let parentID = parent["parent_id"] as? String else {
+            throw Failure(code:"read_failed",message:"无法读取分区归属。")
+        }
+        let memberships = try sectionMemberships(list)
+        return ["section_id": memberships[remID(object).uppercased()] ?? memberships[parentID.uppercased()] ?? ""]
+    }
+    let urgent=remValue(remObject(object,"urgentAlarmContext"),"isUrgentStateEnabledForCurrentUser") as? NSNumber
+    return mergeReadStates([parent, children, section,
+        ["urgent":urgent?.boolValue as Any? ?? NSNull(), "urgent_supported":urgent != nil],
+        reminderAttachmentState(object)])
 }
 func setReminderAttachments(_ change:NSObject, specs:[[String:Any]]) throws {
     let context=try remCall(change,"attachmentContext")
@@ -1533,6 +1673,7 @@ func setExtendedReminder(_ native:PersonalReminderContainers, _ save:NSObject, _
     }
 }
 func validateReminderRelations(_ request:[String:Any], _ item:EKReminder, fields:[String:Any]) throws {
+    if text(request["action"]) != "delete" && Set(fields.keys).isDisjoint(with: ["parent_id", "section_id", "calendar_id", "urgent", "due", "completed"]) { return }
     let native=try PersonalReminderAlerts()
     let existing = text(request["action"]) == "create" ? nil : try native.reminder(item.calendarItemIdentifier)
     let current = try existing.map{try extendedReminderState($0)} ?? [:]
@@ -1546,6 +1687,7 @@ func validateReminderRelations(_ request:[String:Any], _ item:EKReminder, fields
         guard text(actual["calendar_id"])==item.calendar.calendarIdentifier else { throw Failure(code:"invalid_fields",message:"父任务、分区和事项必须属于同一清单。") }
         if field=="section_id" && !text(current["parent_id"]).isEmpty { throw Failure(code:"invalid_fields",message:"子任务随父任务归属分区，请修改父任务的分区。") }
         if field=="parent_id" {
+            try requireReadableWriteFields(actual, fields: ["parent_id": id], action: "update")
             guard text(actual["parent_id"]).isEmpty, (current["subtask_ids"] as? [String] ?? []).isEmpty else { throw Failure(code:"invalid_fields",message:"Apple 提醒事项不支持多层子任务；请先解除嵌套关系。") }
             var cursor=id;var visited=Set<String>()
             while !cursor.isEmpty {
@@ -1612,7 +1754,7 @@ do {
         try authorize()
         emit(["ok": true, "data": permissionStatus()])
     } else {
-        try requireAccess()
+        if action != "snapshot" { try requireAccess(request) }
         if action == "watch" {
             let observer = NotificationCenter.default.addObserver(forName: .EKEventStoreChanged, object: nil, queue: .main) { _ in
                 emit(["ok": true, "data": ["changed": true]])
@@ -1623,8 +1765,8 @@ do {
         } else if action == "snapshot" {
             emit(["ok": true, "data": try snapshot(request)])
         } else if action == "detail" {
-            let item = ["section","event_calendar"].contains(text(request["kind"])) ? try extraContainerDetail(request) : ["list", "group"].contains(text(request["kind"]))
-                ? try PersonalReminderContainers().detail(request)
+            let item = ["section", "event_calendar", "list", "group"].contains(text(request["kind"]))
+                ? try readContainerDetail(request)
                 : try payload(target(request, kind: text(request["kind"]), id: text(request["id"])))
             emit(["ok": true, "data": ["item": item]])
         } else if ["create", "update", "delete"].contains(action) {

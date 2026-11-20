@@ -18,9 +18,9 @@ CURRENT = test_package.ARCHIVE
 
 @pytest.mark.skipif(not PREVIOUS.is_file() or not CURRENT.is_file(), reason='需要新旧两个真实安装包')
 @run_async
-async def test_published_052_upgrade_preserves_login_history_config_and_user_schedule(tmp_path, monkeypatch):
+async def test_published_upgrade_preserves_login_history_config_and_user_schedule(tmp_path, monkeypatch):
     with tarfile.open(PREVIOUS) as archive:
-        assert json.load(archive.extractfile('package/package.json'))['version'] == '0.5.2'
+        assert json.load(archive.extractfile('package/package.json'))['version'] in {'0.5.2', '0.6.0'}
     monkeypatch.setattr(test_package, 'ARCHIVE', PREVIOUS)
     h = Installed(tmp_path, [create('release-060-preserved-task', 3600), '旧版用户任务已设置。'])
     try:

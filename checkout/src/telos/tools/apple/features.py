@@ -20,6 +20,30 @@ QUERY_FIELDS = {
     'due_end': {'type':'string','description':'提醒事项到期范围终点（不含），YYYY-MM-DD或带时区ISO日期。'},
 }
 
+def unavailable_fields(item):
+    missing = set(item.get('unavailable_fields', []))
+    for field in ('flagged', 'urgent', 'attachments', 'tags', 'parent_id', 'subtask_ids', 'section_id', 'travel_time_minutes'):
+        if item.get(field + '_supported') is False or (field in item and item[field] is None):
+            missing.add(field)
+    return missing
+
+
+def require_write_fields(kind, action, fields, current):
+    """Unknown optional reads may be displayed, never used as a mutation baseline."""
+    missing = unavailable_fields(current)
+    needed = set(fields)
+    if kind == 'reminder':
+        if action == 'delete' or set(fields) & {'parent_id', 'calendar_id', 'completed'}:
+            needed.update(('parent_id', 'subtask_ids'))
+        if 'section_id' in fields or 'calendar_id' in fields:
+            needed.update(('parent_id', 'section_id'))
+        if 'due' in fields:
+            needed.update(('urgent', 'early_reminder', 'early_reminder_minutes'))
+    elif kind in CONTAINER_KINDS and missing:
+        needed.update(missing)
+    if needed & missing:
+        raise ValueError('以下字段不可读，不能安全执行此修改：' + '、'.join(sorted(needed & missing)))
+
 def validate_features(kind, fields, current=None):
     current = current or {}
     for key in ('parent_id','section_id','urgent','attachments'):
@@ -37,7 +61,10 @@ def validate_features(kind, fields, current=None):
         due = values.get('due','')
         if len(due)<=10 or datetime.fromisoformat(due).tzinfo is None:
             raise ValueError('紧急提醒需要明确到期日期、时刻和时区。')
-    existing = {a['id'] for a in current.get('attachments',[]) if a.get('id')}
+    if 'attachments' in fields and (current.get('attachments_supported') is False
+                                   or ('attachments' in current and current['attachments'] is None)):
+        raise ValueError('当前事项的附件不可读，不能替换或清空附件。')
+    existing = {a['id'] for a in (current.get('attachments') or []) if a.get('id')}
     seen = set()
     for attachment in fields.get('attachments',[]):
         if len(attachment)!=1 or not set(attachment)<={'id','file_path','url'}:
@@ -71,7 +98,7 @@ def feature_summary(fields, current):
 def matches_filters(item, args):
     for key,field in [('calendar_ids','calendar_id'),('section_ids','section_id'),('parent_ids','parent_id')]:
         if args.get(key) and item.get(field) not in args[key]: return False
-    if args.get('tags') and not {t.casefold() for t in args['tags']} <= {t.casefold() for t in item.get('tags',[])}: return False
+    if args.get('tags') and not {t.casefold() for t in args['tags']} <= {t.casefold() for t in (item.get('tags') or [])}: return False
     for key in ('flagged','urgent','priority'):
         if key in args and item.get(key)!=args[key]: return False
     if any(k in args for k in ('due_start','due_end','include_overdue')):
